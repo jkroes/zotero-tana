@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": true,
+    "disableSizeLimit": true,
+    "esModuleInterop": true,
+    "importHelpers": true,
+    "jsx": "react",
+    "lib": ["ES2023", "dom"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "preserveConstEnums": false,
+    "removeComments": false,
+    "sourceMap": true,
+    "strict": true,
+    "target": "ES2022",
+    "typeRoots": ["./types", "./node_modules/@types"]
+  },
+  "include": [
+    "scripts/**/*",
+    "src/**/*",
+    "test/**/*",
+    "types/**/*",
+    "*.mjs",
+    "*.mts",
+    "*.ts"
+  ]
+}

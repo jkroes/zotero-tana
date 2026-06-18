@@ -1,0 +1,115 @@
+import { EventEmitter } from 'eventemitter3';
+
+import { logger } from '../utils';
+
+import type { Service } from './service';
+
+type CollectionID = Zotero.Collection['id'];
+type ItemID = Zotero.Item['id'];
+type TagID = Zotero.DataObjectID;
+
+type NotifierIDs = readonly (number | string)[];
+
+type NotifierEvents = {
+  'collection.delete': CollectionID[];
+  'collection.modify': CollectionID[];
+  'collection-item.add': [collectionID: CollectionID, itemID: ItemID][];
+  'item.modify': ItemID[];
+  'item-tag.modify': [itemID: ItemID, tagID: TagID][];
+  'item-tag.remove': [itemID: ItemID, tagID: TagID][];
+};
+
+type NotifierEventName = keyof NotifierEvents;
+
+type NotifierEventsMap = {
+  [E in NotifierEventName]: [event: E, ids: NotifierEvents[E]];
+};
+
+type NotifierEventListener = (
+  ...[event, ids]: NotifierEventsMap[NotifierEventName]
+) => void;
+
+export type NotifierEventParams = Parameters<NotifierEventListener>;
+
+type EventTypes = {
+  'notifier-event': NotifierEventListener;
+  'request-sync-collection': (collection: Zotero.Collection) => void;
+  'request-sync-items': (items: Zotero.Item[]) => void;
+};
+
+export class EventManager implements Service {
+  private readonly emitter = new EventEmitter<EventTypes>();
+
+  readonly emit = this.emitter.emit.bind(this.emitter);
+  readonly addListener = this.emitter.addListener.bind(this.emitter);
+  readonly removeListener = this.emitter.removeListener.bind(this.emitter);
+
+  private observerID?: ReturnType<Zotero.Notifier['registerObserver']>;
+
+  public startup() {
+    this.registerObserver();
+  }
+
+  public shutdown() {
+    this.emitter.removeAllListeners();
+    this.unregisterObserver();
+  }
+
+  private registerObserver() {
+    this.observerID = Zotero.Notifier.registerObserver(
+      this.observer,
+      ['collection', 'collection-item', 'item', 'item-tag'],
+      'zotana',
+    );
+  }
+
+  private unregisterObserver() {
+    if (this.observerID) {
+      Zotero.Notifier.unregisterObserver(this.observerID);
+      delete this.observerID;
+    }
+  }
+
+  private observer = {
+    notify: (
+      event: string,
+      type: Zotero.Notifier.Type,
+      ids: NotifierIDs,
+      _extraData: Record<string, unknown>,
+    ) => {
+      logger.debug(`Notified of ${event} ${type} for IDs`, ids);
+
+      const eventName = `${type}.${event}`;
+
+      switch (eventName) {
+        case 'collection.delete':
+        case 'collection.modify':
+        case 'item.modify':
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          this.emitter.emit('notifier-event', eventName, ids as number[]);
+          break;
+        case 'collection-item.add':
+        case 'item-tag.modify':
+        case 'item-tag.remove':
+          this.emitter.emit(
+            'notifier-event',
+            eventName,
+            this.mapCompoundIDs(ids),
+          );
+          break;
+      }
+    },
+  };
+
+  private mapCompoundIDs(
+    this: void,
+    compoundIDs: NotifierIDs,
+  ): [number, number][] {
+    /* oxlint-disable typescript/no-unsafe-type-assertion */
+    return (compoundIDs as string[]).map((compoundID) => {
+      const ids = compoundID.split('-').map(Number) as [number, number];
+      return [ids[0], ids[1]];
+    });
+    /* oxlint-enable typescript/no-unsafe-type-assertion */
+  }
+}
