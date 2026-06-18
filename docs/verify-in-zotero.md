@@ -12,7 +12,8 @@ link-attachment, the prefs pane, the menu triggers, the Notifier.
 - The built add-on: `xpi/zotana-0.1.1-jkroes.Mac.attlocal.net.xpi`.
 
 Useful Main-workspace IDs (for the test):
-- Library (`_STASH`) — `NAoK7gu_J9RW_STASH`  ← simplest parent node for a first run
+
+- Library (`_STASH`) — `NAoK7gu_J9RW_STASH` ← simplest parent node for a first run
 - Inbox — `NAoK7gu_J9RW_CAPTURE_INBOX`
 - `#reference` tag — `p5LeXSkgwLnh`; `#quote` — `ECOaVRR28Of0`
 
@@ -84,7 +85,7 @@ Useful Main-workspace IDs (for the test):
   Error Console**) shows Zotana's logs and any stack traces. Enable logging
   before reproducing.
 - API-shape failures surface as `TanaApiError: Tana Local API <METHOD> <path>
-  failed: <status>` — note the status/path.
+failed: <status>` — note the status/path.
 - "Tana Local API is not reachable" → Tana app not running or Local API disabled.
 - Auth errors → wrong token type (must be the Local API PAT).
 

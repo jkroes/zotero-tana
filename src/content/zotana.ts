@@ -101,7 +101,6 @@ export class Zotana {
     });
     logger.groupEnd();
   }
-
 }
 
 export type ZoteroWithZotana = Zotero & { Zotana?: Zotana };

@@ -5,6 +5,8 @@ import type { createRoot } from 'react-dom/client';
 import type { FluentMessageId } from '../../locale/fluent-types';
 import { createXULElement, getXULElementById, logger } from '../utils';
 
+import { SchemaPanel } from './schema-panel';
+import { SyncConfigsTable } from './sync-configs-table';
 import {
   ZotanaPref,
   PAGE_TITLE_FORMAT_L10N_IDS,
@@ -12,8 +14,6 @@ import {
   getZotanaPref,
   setZotanaPref,
 } from './zotana-pref';
-import { SchemaPanel } from './schema-panel';
-import { SyncConfigsTable } from './sync-configs-table';
 
 type ReactDOMClient = typeof ReactDOM & { createRoot: typeof createRoot };
 

@@ -37,7 +37,12 @@ export async function syncAnnotations(
   for (const annotation of current) {
     const previous = stored[annotation.key];
     const nodeId = previous
-      ? await updateAnnotationNode(client, referenceNodeId, previous, annotation)
+      ? await updateAnnotationNode(
+          client,
+          referenceNodeId,
+          previous,
+          annotation,
+        )
       : await createAnnotationNode(client, referenceNodeId, annotation);
 
     result[annotation.key] = {

@@ -54,9 +54,7 @@ export class SyncManager implements Service {
 
     const validItems = items.filter(
       (item) =>
-        !item.deleted &&
-        item.isRegularItem() &&
-        isItemInSyncedCollection(item),
+        !item.deleted && item.isRegularItem() && isItemInSyncedCollection(item),
     );
 
     this.enqueueItemsToSync(validItems);

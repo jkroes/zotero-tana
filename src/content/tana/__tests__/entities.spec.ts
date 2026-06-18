@@ -9,7 +9,13 @@ const SERIES_EDITOR = 3;
 const TRANSLATOR = 4;
 
 function creator(overrides: Partial<Zotero.Creator>): Zotero.Creator {
-  return { firstName: '', lastName: '', fieldMode: 0, creatorTypeID: 0, ...overrides };
+  return {
+    firstName: '',
+    lastName: '',
+    fieldMode: 0,
+    creatorTypeID: 0,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
@@ -27,10 +33,22 @@ describe('bucketCreators', () => {
   it('routes the primary role to lead, editor roles to editors, rest to contributors', () => {
     const item = createZoteroItemMock({ itemTypeID: 1 });
     item.getCreators.mockReturnValue([
-      creator({ firstName: 'Ashish', lastName: 'Vaswani', creatorTypeID: AUTHOR }),
+      creator({
+        firstName: 'Ashish',
+        lastName: 'Vaswani',
+        creatorTypeID: AUTHOR,
+      }),
       creator({ firstName: 'Ed', lastName: 'Itor', creatorTypeID: EDITOR }),
-      creator({ firstName: 'Sue', lastName: 'Ries', creatorTypeID: SERIES_EDITOR }),
-      creator({ firstName: 'Trans', lastName: 'Lator', creatorTypeID: TRANSLATOR }),
+      creator({
+        firstName: 'Sue',
+        lastName: 'Ries',
+        creatorTypeID: SERIES_EDITOR,
+      }),
+      creator({
+        firstName: 'Trans',
+        lastName: 'Lator',
+        creatorTypeID: TRANSLATOR,
+      }),
     ]);
 
     expect(bucketCreators(item)).toStrictEqual({
@@ -46,7 +64,11 @@ describe('bucketCreators', () => {
   it('routes institutional creators (fieldMode 1) to Organization using the single-field name', () => {
     const item = createZoteroItemMock({ itemTypeID: 1 });
     item.getCreators.mockReturnValue([
-      creator({ lastName: 'World Health Organization', fieldMode: 1, creatorTypeID: AUTHOR }),
+      creator({
+        lastName: 'World Health Organization',
+        fieldMode: 1,
+        creatorTypeID: AUTHOR,
+      }),
     ]);
 
     expect(bucketCreators(item).lead).toStrictEqual([

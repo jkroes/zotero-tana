@@ -38,14 +38,14 @@ Source lives under `src/content/`.
   config, and field-creation order). `effectiveFieldName(key, name)` resolves a
   blank configured name to the catalog default.
 - **`tana/schema.ts`** — `ensureSchema(client, config, {workspaceId,
-  optionSeeds})`: finds the tag by name (creates it + `#Person` /
+optionSeeds})`: finds the tag by name (creates it + `#Person` /
   `#Organization` / `#quote` if missing), parses `/tags/{id}/schema` markdown
   for name→id, creates missing **enabled** fields with their catalog `dataType`,
   and seed-then-trashes the placeholder option needed to create empty Options
   fields. Returns `ResolvedSchema`. Run as a sync preflight, so the first sync
   auto-bootstraps.
 - **`prefs/schema-config.ts`** — `SchemaConfig { tagName, fields:[{key, name,
-  enabled}] }`, persisted as JSON in the `schemaConfig` pref. `mergeSchemaConfig`
+enabled}] }`, persisted as JSON in the `schemaConfig` pref. `mergeSchemaConfig`
   reconciles a stored config against the catalog (fills new fields, drops unknown
   keys, trims names; blank stays blank). A blank `name` means "use the catalog
   default" (rendered as a grey placeholder) and is resolved at sync time.
@@ -110,12 +110,12 @@ collection / sync-on-modify services are inherited from Notero.
   cloud **"Get API Token" / "Make API token"** JWT is **rejected with 401** — do
   not use it.
 - Key endpoints: `POST /nodes/{parent}/import` · `POST
-  /nodes/{nodeId}/fields/{attributeId}/content` · `.../option` · `POST
-  /nodes/{nodeId}/tags|trash|update|move` · `GET /nodes/search` · `GET
-  /nodes/{nodeId}` · `GET /workspaces[/{ws}/tags]` · `POST /tags/{tagId}/fields` ·
+/nodes/{nodeId}/fields/{attributeId}/content` · `.../option` · `POST
+/nodes/{nodeId}/tags|trash|update|move` · `GET /nodes/search` · `GET
+/nodes/{nodeId}` · `GET /workspaces[/{ws}/tags]` · `POST /tags/{tagId}/fields` ·
   `GET /tags/{tagId}/schema` · `GET /health`.
 - `dataType` ∈ `plain | number | date | url | email | checkbox | user | instance
-  | options`. `instance` needs `sourceTagId`; `options` needs a non-empty seed.
+| options`. `instance` needs `sourceTagId`; `options` needs a non-empty seed.
 - **Verified behaviors:** `import` returns created node IDs (the reference node is
   the created node whose `name` === the title); `zotero://` links are accepted;
   inline `[[Name #Person]]` dedups by **exact name**; Options fields auto-collect
