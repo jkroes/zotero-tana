@@ -22,19 +22,24 @@ update the existing node.
 - Zotero 7+
 - The **Tana desktop app**, running, with the **Local API enabled** and the
   target workspace loaded.
-- A Tana **API token** (Tana → Settings → API Tokens).
-- The `#reference` schema in your Tana workspace (plus `#Person` /
-  `#Organization`). Field/tag IDs live in `src/content/tana/constants.ts`.
+- A Tana **Personal Access Token**, created from Tana's account settings
+  (top-right). The cloud "Get API Token" token is rejected by the Local API.
+
+You do **not** need to set up the Tana schema by hand — Zotana creates the tag
+and its fields for you (see Setup).
 
 ## Setup
 
 In Zotero → Settings → Zotana:
 
-1. **API Token** — paste your Tana personal API token.
+1. **API Token** — paste your Tana personal access token.
 2. **Parent Node ID** — the Tana node where new reference nodes are created
    (e.g. your Library or a dedicated node).
 3. **Local API URL** — optional; defaults to `http://localhost:8262`.
-4. Enable the collections you want to sync, and choose the reference node title
+4. In the **schema** panel, pick the workspace, keep or rename the reference tag
+   and fields (blank field names use their defaults), choose which fields sync,
+   and click **Create / refresh schema in Tana** to create the tag + fields.
+5. Enable the collections you want to sync, and choose the reference node title
    format.
 
 Then right-click a collection or items → **Sync to Tana**, or rely on automatic
@@ -64,11 +69,11 @@ sync-on-modify services are inherited from Notero.
 
 ## Status
 
-Alpha. The mapping and sync engine are ported and unit-tested, but a few Tana
-Local API request shapes still need a live-validation pass against a running
-server (node rename, reference/option field updates, the Tana node-URL scheme) —
-see `HANDOFF.md`. Note syncing and a "find duplicates" command are not yet
-implemented.
+Alpha. The mapping and sync engine are ported and unit-tested, and the core
+write path (import, rename, field updates, schema creation) is validated against
+a running Local API server. What remains is a full end-to-end pass in Zotero —
+creating the schema and syncing items live — plus note syncing, which is not yet
+implemented. See `CLAUDE.md` for the architecture and the open-work list.
 
 ## Credits
 

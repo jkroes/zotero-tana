@@ -1,5 +1,5 @@
-import { getSchemaConfig } from '../prefs/schema-config';
 import { ItemSyncError, LocalizableError } from '../errors';
+import { getSchemaConfig } from '../prefs/schema-config';
 import {
   ZotanaPref,
   PageTitleFormat,
@@ -31,14 +31,15 @@ export type SyncJobParams = {
   titleFormat: TitleFormat;
 };
 
-const PAGE_TITLE_FORMAT_TO_TITLE_FORMAT: Record<PageTitleFormat, TitleFormat> = {
-  [PageTitleFormat.itemAuthorDateCitation]: TitleFormat.authorDateCitation,
-  [PageTitleFormat.itemCitationKey]: TitleFormat.citationKey,
-  [PageTitleFormat.itemFullCitation]: TitleFormat.fullCitation,
-  [PageTitleFormat.itemInTextCitation]: TitleFormat.inTextCitation,
-  [PageTitleFormat.itemShortTitle]: TitleFormat.shortTitle,
-  [PageTitleFormat.itemTitle]: TitleFormat.title,
-};
+const PAGE_TITLE_FORMAT_TO_TITLE_FORMAT: Record<PageTitleFormat, TitleFormat> =
+  {
+    [PageTitleFormat.itemAuthorDateCitation]: TitleFormat.authorDateCitation,
+    [PageTitleFormat.itemCitationKey]: TitleFormat.citationKey,
+    [PageTitleFormat.itemFullCitation]: TitleFormat.fullCitation,
+    [PageTitleFormat.itemInTextCitation]: TitleFormat.inTextCitation,
+    [PageTitleFormat.itemShortTitle]: TitleFormat.shortTitle,
+    [PageTitleFormat.itemTitle]: TitleFormat.title,
+  };
 
 export async function performSyncJob(
   itemIDs: Set<Zotero.Item['id']>,
@@ -122,7 +123,10 @@ function zoteroItemTypeNames(): string[] {
       Zotero.ItemTypes.getLocalizedString(type.id),
     );
   } catch (error) {
-    logger.error('Failed to enumerate Zotero item types for option seed', error);
+    logger.error(
+      'Failed to enumerate Zotero item types for option seed',
+      error,
+    );
     return [];
   }
 }
@@ -159,11 +163,12 @@ async function syncItems(
 
     try {
       if (item.isNote()) {
-        // Note syncing is not yet implemented for Tana (see HANDOFF stage 6).
+        // Note syncing is not yet implemented for Tana (see CLAUDE.md "Open work").
         logger.debug('Skipping note item (note syncing not yet supported)');
       } else {
         const referencedFields = await syncRegularItem(item, params);
-        if (referencedFields.length) warnings.push({ item, fields: referencedFields });
+        if (referencedFields.length)
+          warnings.push({ item, fields: referencedFields });
       }
     } catch (error) {
       throw new ItemSyncError(error, item);
