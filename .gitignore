@@ -1,0 +1,15 @@
+build/
+gen/
+node_modules/
+zotero.config.json
+.env
+.eslintcache
+*~
+*.cache
+*.debug
+*.js.map
+*.log
+*.status
+*.swp
+*.tmp
+*.xpi

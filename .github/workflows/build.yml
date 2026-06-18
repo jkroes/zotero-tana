@@ -1,0 +1,50 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # The branches below must be a subset of the branches above.
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          cache: true
+          node-version-file: '.node-version'
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - name: Ensure fluent-types.ts is up to date
+        run: |
+          vp run generate-fluent-types
+          git diff --exit-code src/locale/fluent-types.ts
+      - run: vp run verify
+      - run: vp run build
+      - id: artifact-name
+        name: Generate xpi artifact name
+        uses: actions/github-script@v9
+        with:
+          result-encoding: string
+          script: return `zotana-${require('./gen/version')}`
+      - id: upload-artifact
+        name: Upload xpi artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifact-name.outputs.result }}
+          path: build/
+      - name: Comment PR build
+        if: github.event_name == 'pull_request'
+        uses: mshick/add-pr-comment@v3
+        with:
+          message: |
+            ## 🤖 Build Bot
+
+            **✅ Successful build**
+
+            ⬇️ Download: [${{ steps.artifact-name.outputs.result }}](${{ steps.upload-artifact.outputs.artifact-url }})

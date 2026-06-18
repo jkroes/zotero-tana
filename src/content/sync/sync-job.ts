@@ -1,0 +1,206 @@
+import { ItemSyncError, LocalizableError } from '../errors';
+import { getSchemaConfig } from '../prefs/schema-config';
+import {
+  ZotanaPref,
+  PageTitleFormat,
+  getZotanaPref,
+  getRequiredZotanaPref,
+} from '../prefs/zotana-pref';
+import { TanaClient } from '../tana/client';
+import { APA_STYLE } from '../tana/constants';
+import { TitleFormat } from '../tana/reference-builder';
+import { ensureSchema, type ResolvedSchema } from '../tana/schema';
+import { getLocalizedErrorMessage, logger } from '../utils';
+
+import { ProgressWindow, type ItemWarning } from './progress-window';
+import { syncRegularItem } from './sync-regular-item';
+
+export type SyncJobParams = {
+  client: TanaClient;
+  /** Resolved tag + field IDs for this job (created/looked up by name). */
+  schema: ResolvedSchema;
+  /** Parent node under which new reference nodes are created. */
+  parentNodeId: string;
+  /**
+   * Parent node under which new #Person/#Organization entity nodes are created.
+   * Resolved to the workspace Library (`_STASH`) so entities match where Tana
+   * files inline-created ones on the create path.
+   */
+  entityParentNodeId: string;
+  citationFormat: string;
+  titleFormat: TitleFormat;
+};
+
+const PAGE_TITLE_FORMAT_TO_TITLE_FORMAT: Record<PageTitleFormat, TitleFormat> =
+  {
+    [PageTitleFormat.itemAuthorDateCitation]: TitleFormat.authorDateCitation,
+    [PageTitleFormat.itemCitationKey]: TitleFormat.citationKey,
+    [PageTitleFormat.itemFullCitation]: TitleFormat.fullCitation,
+    [PageTitleFormat.itemInTextCitation]: TitleFormat.inTextCitation,
+    [PageTitleFormat.itemShortTitle]: TitleFormat.shortTitle,
+    [PageTitleFormat.itemTitle]: TitleFormat.title,
+  };
+
+export async function performSyncJob(
+  itemIDs: Set<Zotero.Item['id']>,
+  window: Window,
+): Promise<void> {
+  const items = Zotero.Items.get(Array.from(itemIDs));
+  if (!items.length) return;
+
+  const progressWindow = new ProgressWindow(items.length, window);
+  await progressWindow.show();
+
+  try {
+    const params = await prepareSyncJob(window);
+    await syncItems(items, progressWindow, params);
+  } catch (error) {
+    await handleError(error, progressWindow, window);
+  }
+}
+
+async function prepareSyncJob(window: Window): Promise<SyncJobParams> {
+  const token = getRequiredZotanaPref(ZotanaPref.tanaToken);
+  const parentNodeId = getRequiredZotanaPref(ZotanaPref.tanaParentNodeId);
+  const baseUrl = getZotanaPref(ZotanaPref.tanaBaseUrl);
+
+  const client = new TanaClient({
+    token,
+    baseUrl,
+    fetch: window.fetch.bind(window),
+  });
+
+  const healthy = await client.health();
+  if (!healthy) {
+    throw new LocalizableError(
+      'Tana Local API is not reachable. Open Tana and enable the Local API.',
+      'zotana-error-tana-unreachable',
+    );
+  }
+
+  const workspaceId = await resolveWorkspaceId(client);
+  const schema = await ensureSchema(client, getSchemaConfig(), {
+    workspaceId,
+    optionSeeds: { itemType: zoteroItemTypeNames() },
+  });
+
+  return {
+    client,
+    schema,
+    parentNodeId,
+    // New entities land in the workspace Library, matching where Tana files the
+    // inline `[[Name #Person]]` references the create path emits.
+    entityParentNodeId: `${schema.workspaceId}_STASH`,
+    citationFormat: getCitationFormat(),
+    titleFormat: getTitleFormat(),
+  };
+}
+
+/**
+ * The workspace to create/resolve the schema in: the user's configured choice, or
+ * the first workspace the token can see. (Tags are workspace-scoped, so the parent
+ * node configured for references must live in this same workspace.)
+ */
+async function resolveWorkspaceId(client: TanaClient): Promise<string> {
+  const configured = getZotanaPref(ZotanaPref.tanaWorkspaceId);
+  if (configured) return configured;
+
+  const workspaces = await client.listWorkspaces();
+  const first = workspaces[0]?.id;
+  if (!first) {
+    throw new LocalizableError(
+      'No Tana workspace is available for the provided token.',
+      'zotana-error-no-workspace',
+    );
+  }
+  return first;
+}
+
+/** Localized names of all Zotero item types, to seed the Item Type options field. */
+function zoteroItemTypeNames(): string[] {
+  try {
+    return Zotero.ItemTypes.getTypes().map((type) =>
+      Zotero.ItemTypes.getLocalizedString(type.id),
+    );
+  } catch (error) {
+    logger.error(
+      'Failed to enumerate Zotero item types for option seed',
+      error,
+    );
+    return [];
+  }
+}
+
+function getCitationFormat(): string {
+  const format = Zotero.Prefs.get('export.quickCopy.setting');
+  if (typeof format === 'string' && format) return format;
+  return APA_STYLE;
+}
+
+function getTitleFormat(): TitleFormat {
+  const pref = getZotanaPref(ZotanaPref.pageTitleFormat);
+  return pref
+    ? PAGE_TITLE_FORMAT_TO_TITLE_FORMAT[pref]
+    : TitleFormat.authorDateCitation;
+}
+
+async function syncItems(
+  items: Zotero.Item[],
+  progressWindow: ProgressWindow,
+  params: SyncJobParams,
+) {
+  const warnings: ItemWarning[] = [];
+
+  for (const [index, item] of items.entries()) {
+    const step = index + 1;
+    logger.groupCollapsed(
+      `Syncing item ${step} of ${items.length} with ID`,
+      item.id,
+    );
+    logger.debug(item.getDisplayTitle());
+
+    await progressWindow.updateText(step);
+
+    try {
+      if (item.isNote()) {
+        // Note syncing is not yet implemented for Tana (see CLAUDE.md "Open work").
+        logger.debug('Skipping note item (note syncing not yet supported)');
+      } else {
+        const referencedFields = await syncRegularItem(item, params);
+        if (referencedFields.length)
+          warnings.push({ item, fields: referencedFields });
+      }
+    } catch (error) {
+      throw new ItemSyncError(error, item);
+    } finally {
+      logger.groupEnd();
+    }
+
+    progressWindow.updateProgress(step);
+  }
+
+  await progressWindow.complete(warnings);
+}
+
+async function handleError(
+  error: unknown,
+  progressWindow: ProgressWindow,
+  window: Window,
+) {
+  let cause = error;
+  let failedItem: Zotero.Item | undefined;
+
+  if (error instanceof ItemSyncError) {
+    cause = error.cause;
+    failedItem = error.item;
+  }
+
+  const errorMessage = await getLocalizedErrorMessage(
+    cause,
+    window.document.l10n,
+  );
+
+  logger.error(error, failedItem?.getDisplayTitle());
+
+  progressWindow.fail(errorMessage, failedItem);
+}

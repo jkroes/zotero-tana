@@ -1,0 +1,96 @@
+<linkset>
+  <html:link rel="localization" href="zotana.ftl" />
+</linkset>
+
+<!-- `Zotana_Preferences` is defined in `src/content/prefs/preferences.tsx` -->
+<groupbox class="zotana-groupbox" onload="Zotana_Preferences.init()">
+  <label>
+    <html:h2 data-l10n-id="zotana-preferences-tana-groupbox-heading" />
+  </label>
+  <label data-l10n-id="zotana-preferences-tana-groupbox-description" />
+  <hbox align="center" class="zotana-margin-block-start">
+    <label
+      control="zotana-tanaToken"
+      data-l10n-id="zotana-preferences-tana-token-label"
+    />
+    <html:input
+      data-l10n-id="zotana-preferences-tana-token-input"
+      id="zotana-tanaToken"
+      type="password"
+    />
+  </hbox>
+  <hbox align="center" class="zotana-margin-block-start">
+    <label
+      control="zotana-tanaParentNodeId"
+      data-l10n-id="zotana-preferences-tana-parent-node-label"
+    />
+    <html:input
+      data-l10n-id="zotana-preferences-tana-parent-node-input"
+      id="zotana-tanaParentNodeId"
+      type="text"
+    />
+  </hbox>
+  <hbox align="center" class="zotana-margin-block-start">
+    <label
+      control="zotana-tanaBaseUrl"
+      data-l10n-id="zotana-preferences-tana-base-url-label"
+    />
+    <html:input
+      data-l10n-id="zotana-preferences-tana-base-url-input"
+      id="zotana-tanaBaseUrl"
+      type="text"
+    />
+  </hbox>
+</groupbox>
+
+<groupbox class="zotana-groupbox">
+  <label>
+    <html:h2 data-l10n-id="zotana-preferences-schema-groupbox-heading" />
+  </label>
+  <label data-l10n-id="zotana-preferences-schema-groupbox-description" />
+  <html:div
+    id="zotana-schemaPanel-container"
+    class="zotana-margin-block-start"
+  />
+</groupbox>
+
+<groupbox class="zotana-groupbox">
+  <label>
+    <html:h2 data-l10n-id="zotana-preferences-properties-groupbox-heading" />
+  </label>
+  <label data-l10n-id="zotana-preferences-properties-groupbox-description" />
+  <hbox align="center" class="zotana-margin-block-start">
+    <label
+      control="zotana-pageTitleFormat"
+      data-l10n-id="zotana-preferences-page-title-format"
+    />
+    <menulist
+      id="zotana-pageTitleFormat"
+      disabled="true"
+      native="true"
+      preference="extensions.zotana.pageTitleFormat"
+    >
+      <menupopup />
+    </menulist>
+  </hbox>
+</groupbox>
+
+<groupbox class="zotana-groupbox">
+  <label>
+    <html:h2 data-l10n-id="zotana-preferences-sync-groupbox-heading" />
+  </label>
+  <label data-l10n-id="zotana-preferences-sync-groupbox-description1" />
+  <label data-l10n-id="zotana-preferences-sync-groupbox-description2" />
+  <hbox
+    class="zotana-margin-block-start zotana-margin-block-end virtualized-table-container"
+    flex="1"
+  >
+    <html:div id="zotana-syncConfigsTable-container" />
+  </hbox>
+  <checkbox
+    data-l10n-id="zotana-preferences-sync-on-modify-items"
+    id="zotana-syncOnModifyItems"
+    native="true"
+    preference="extensions.zotana.syncOnModifyItems"
+  />
+</groupbox>

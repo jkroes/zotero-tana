@@ -1,0 +1,93 @@
+import type { ZoteroWithZotana } from './content/zotana';
+
+declare const Zotero: ZoteroWithZotana;
+
+const LOG_PREFIX = '[Zotana] ';
+
+function log(msg: string) {
+  Zotero.debug(`${LOG_PREFIX}${msg}`);
+  Zotero.log(`${LOG_PREFIX}${msg}`, 'info');
+}
+
+/**
+ *
+ * Bootstrap entry points
+ * @see https://www.zotero.org/support/dev/zotero_7_for_developers#xul_overlays_bootstrapjs
+ * @see https://udn.realityripple.com/docs/Archive/Add-ons/Bootstrapped_extensions#Bootstrap_entry_points
+ *
+ */
+
+/**
+ * Your bootstrap script must include an `install()` function, which the
+ * application calls before the first call to `startup()` after the extension is
+ * installed, upgraded, or downgraded.
+ */
+// oxlint-disable-next-line no-unused-vars
+function install({ version }: BootstrapData, _reason: Zotero.Plugins.REASONS) {
+  log(`Installed v${version}`);
+}
+
+/**
+ * Called when the extension needs to start itself up. This happens at
+ * application launch time, when the extension is enabled after being disabled
+ * or after it has been shut down in order to install an update. As such, this
+ * can be called many times during the lifetime of the application.
+ */
+// oxlint-disable-next-line no-unused-vars
+async function startup(
+  { id, resourceURI, rootURI = resourceURI.spec, version }: BootstrapData,
+  _reason: Zotero.Plugins.REASONS,
+) {
+  log(`Starting v${version}`);
+
+  Services.scriptloader.loadSubScript(rootURI + 'content/zotana.js');
+
+  await Zotero.Zotana?.startup({ pluginID: id, rootURI, version });
+}
+
+/**
+ * Called when a main Zotero window is opened.
+ * @since Zotero 7
+ * @see https://www.zotero.org/support/dev/zotero_7_for_developers#window_hooks
+ */
+// oxlint-disable-next-line no-unused-vars
+function onMainWindowLoad({ window }: { window: Zotero.ZoteroWindow }) {
+  Zotero.Zotana?.addToWindow(window);
+}
+
+/**
+ * Called when a main Zotero window is closed.
+ * @since Zotero 7
+ * @see https://www.zotero.org/support/dev/zotero_7_for_developers#window_hooks
+ */
+// oxlint-disable-next-line no-unused-vars
+function onMainWindowUnload({ window }: { window: Zotero.ZoteroWindow }) {
+  Zotero.Zotana?.removeFromWindow(window);
+}
+
+/**
+ * Called when the extension needs to shut itself down, such as when the
+ * application is quitting or when the extension is about to be upgraded or
+ * disabled. Any user interface that has been injected must be removed, tasks
+ * shut down, and objects disposed of.
+ */
+// oxlint-disable-next-line no-unused-vars
+function shutdown({ version }: BootstrapData, _reason: Zotero.Plugins.REASONS) {
+  log(`Shutting down v${version}`);
+
+  Zotero.Zotana?.shutdown();
+
+  delete Zotero.Zotana;
+}
+
+/**
+ * This function is called after the last call to `shutdown()` before a
+ * particular version of an extension is uninstalled.
+ */
+// oxlint-disable-next-line no-unused-vars
+function uninstall(
+  { version }: BootstrapData,
+  _reason: Zotero.Plugins.REASONS,
+) {
+  log(`Uninstalled v${version}`);
+}
