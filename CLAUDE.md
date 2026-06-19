@@ -202,31 +202,20 @@ nodes` command. (Also in README.)
 
 ## Open work
 
-- **Live verification (2026-06-19, v0.2):** confirmed against real Zotero + Tana —
-  create, in-place update, multi-item batch, sync-on-modify no-op skip, Title
-  field, **Test D** (both trashed _and_ purged nodes rebuild; attachment repoints),
-  **warn-and-skip** (referenced value node preserved; releases when the backlink is
-  removed), **field-clear** (value node cleared + node name re-renders),
-  **URL-render** (markdown-link clickability proved unreliable across fields/nodes
-  → downgraded to plain text everywhere; see Known limitations), and **annotation
-  add/delete deltas** + the new annotation tags/back-links, all **six title
-  formats**, **group-library** items (back-links use `/groups/{id}/`), and **date
-  granularity** (YYYY / YYYY-MM / YYYY-MM-DD). Caveat: `linksTo` only indexes a
-  reference made in the Tana UI, not one created via the API/Inbox. Live walk of
-  v0.2 is **complete**.
-- **Duplicate-ProgressWindow fix (branch `fix/duplicate-sync-progresswindow`, not
-  merged):** editing a title makes Zotero's File Renaming auto-rename the linked
-  PDF, firing a 2nd `item.modify` mid-sync that raced the contentSig persist and
-  started a duplicate sync. Fixed with an in-flight guard in `sync-manager.ts`
-  (`syncingItemIDs`) + `skipNotifier` on `saveTanaSyncData`'s update saveTx.
-- **Index-lag duplicate fix (same branch):** a rapid second sync of a brand-new
-  item rebuilt a duplicate because the reachability search hadn't indexed the fresh
-  node yet. Fixed with the `createdAt` index-lag grace (see Key design decisions).
-- **Annotation tags + back-link (implemented, bootstrap live-verified 2026-06-19):**
-  highlight→`#highlight`, note→`#comment`, image→`#image`, each with an `Annotation`
-  URL field holding a `zotero://open-pdf/...?annotation=KEY` deep link (plain text,
-  written once in the create paste, never rewritten). Replaces the old bare
-  `#quote` / untagged-children model.
+- **v0.2 fully live-verified + landed on `main` (2026-06-19, PR #7).** The complete
+  live walk against real Zotero + Tana passed: create, in-place update, multi-item
+  batch, sync-on-modify no-op skip, Title field, **Test D** (both trashed _and_
+  purged nodes rebuild + attachment repoint), **warn-and-skip** (value node
+  preserved; releases when the backlink is removed), **field-clear** (value cleared
+  - node name re-renders), all **six title formats**, **group-library** items
+    (back-links use `/groups/{id}/`), and **date granularity** (YYYY / YYYY-MM /
+    YYYY-MM-DD). It also shipped two duplicate-class fixes — the in-flight guard in
+    `sync-manager.ts` (`syncingItemIDs`, for the File-Renaming `item.modify` cascade
+    that raced the contentSig persist) and the `createdAt` index-lag grace (both under
+    Key design decisions) — the **annotation tags + PDF back-links**, and the
+    **plain-text-URL** downgrade (Known limitations). Caveat: `linksTo` only indexes a
+    reference made in the Tana UI, not one created via the API/Inbox. Not yet tagged
+    for release (separate green-`main`-then-tag step; see `docs/RELEASING.md`).
 - **Rich-text note syncing** — deferred. `sync-job` skips note items; supporting
   them needs an HTML→Tana-Paste converter (Notero's `html-to-notion` is the
   reference).
