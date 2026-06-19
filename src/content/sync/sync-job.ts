@@ -1,18 +1,13 @@
 import { ItemSyncError, LocalizableError } from '../errors';
 import { getSchemaConfig } from '../prefs/schema-config';
-import {
-  ZotanaPref,
-  PageTitleFormat,
-  getZotanaPref,
-  getRequiredZotanaPref,
-} from '../prefs/zotana-pref';
+import { ZotanaPref, getZotanaPref, getRequiredZotanaPref } from '../prefs/zotana-pref';
 import { TanaClient } from '../tana/client';
-import { APA_STYLE } from '../tana/constants';
 import { TitleFormat } from '../tana/reference-builder';
 import { ensureSchema, type ResolvedSchema } from '../tana/schema';
 import { getLocalizedErrorMessage, logger } from '../utils';
 
 import { ProgressWindow, type ItemWarning } from './progress-window';
+import { getCitationFormat, getTitleFormat } from './sync-config';
 import { syncRegularItem } from './sync-regular-item';
 
 export type SyncJobParams = {
@@ -30,16 +25,6 @@ export type SyncJobParams = {
   citationFormat: string;
   titleFormat: TitleFormat;
 };
-
-const PAGE_TITLE_FORMAT_TO_TITLE_FORMAT: Record<PageTitleFormat, TitleFormat> =
-  {
-    [PageTitleFormat.itemAuthorDateCitation]: TitleFormat.authorDateCitation,
-    [PageTitleFormat.itemCitationKey]: TitleFormat.citationKey,
-    [PageTitleFormat.itemFullCitation]: TitleFormat.fullCitation,
-    [PageTitleFormat.itemInTextCitation]: TitleFormat.inTextCitation,
-    [PageTitleFormat.itemShortTitle]: TitleFormat.shortTitle,
-    [PageTitleFormat.itemTitle]: TitleFormat.title,
-  };
 
 export async function performSyncJob(
   itemIDs: Set<Zotero.Item['id']>,
@@ -129,19 +114,6 @@ function zoteroItemTypeNames(): string[] {
     );
     return [];
   }
-}
-
-function getCitationFormat(): string {
-  const format = Zotero.Prefs.get('export.quickCopy.setting');
-  if (typeof format === 'string' && format) return format;
-  return APA_STYLE;
-}
-
-function getTitleFormat(): TitleFormat {
-  const pref = getZotanaPref(ZotanaPref.pageTitleFormat);
-  return pref
-    ? PAGE_TITLE_FORMAT_TO_TITLE_FORMAT[pref]
-    : TitleFormat.authorDateCitation;
 }
 
 async function syncItems(

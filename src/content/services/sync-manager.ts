@@ -1,12 +1,19 @@
+import { getTanaSyncData } from '../data/item-data';
 import { loadSyncEnabledCollectionIDs } from '../prefs/collection-sync-config';
 import { getZotanaPref, ZotanaPref } from '../prefs/zotana-pref';
+import { contentSignature } from '../sync/content-signature';
 import { performSyncJob } from '../sync/sync-job';
 import { getAllCollectionItems, logger } from '../utils';
 
 import type { EventManager, NotifierEventParams } from './event-manager';
 import type { Service, ServiceParams } from './service';
 
-const SYNC_DEBOUNCE_MS = 2000;
+/**
+ * How long to wait after the last edit before syncing. Editing an item in the
+ * pane commits one `item.modify` per field, so this coalesces a burst of edits
+ * into one sync once the user settles (each edit resets the timer).
+ */
+const SYNC_DEBOUNCE_MS = 3000;
 
 type QueuedSync = {
   readonly itemIDs: Set<Zotero.Item['id']>;
@@ -57,8 +64,38 @@ export class SyncManager implements Service {
         !item.deleted && item.isRegularItem() && isItemInSyncedCollection(item),
     );
 
-    this.enqueueItemsToSync(validItems);
+    // Auto-sync (modify) path only: skip items whose synced content didn't
+    // actually change, so edits to non-synced or volatile fields don't trigger a
+    // pointless network sync + ProgressWindow. Manual menu syncs below bypass this.
+    void this.enqueueChangedItems(validItems);
   };
+
+  /**
+   * Filter to items whose synced source content changed since their last sync,
+   * then enqueue those. An item that was never synced (or synced before content
+   * signatures existed) has no baseline and always syncs.
+   */
+  private async enqueueChangedItems(items: readonly Zotero.Item[]) {
+    const changed: Zotero.Item[] = [];
+    for (const item of items) {
+      if (await this.hasSyncableChange(item)) changed.push(item);
+    }
+    this.enqueueItemsToSync(changed);
+  }
+
+  private async hasSyncableChange(item: Zotero.Item): Promise<boolean> {
+    const stored = getTanaSyncData(item);
+    if (!stored?.contentSig) return true;
+    try {
+      return (await contentSignature(item)) !== stored.contentSig;
+    } catch (error) {
+      logger.warn(
+        'Failed to compute content signature; syncing item anyway',
+        error,
+      );
+      return true;
+    }
+  }
 
   private handleSyncCollection = (collection: Zotero.Collection) => {
     const validItems = collection

@@ -164,6 +164,14 @@ class ReferenceBuilder {
     this.pushScalar('url', 'url', this.getField('url'));
 
     // Text.
+    // The Zotero item title as its own field — the node *name* is a constructed
+    // citation (author-date, etc.), so without this the actual title is absent.
+    // Falls back to the display title for item types whose title is derived.
+    this.pushScalar(
+      'title',
+      'plain',
+      this.getField('title') || item.getDisplayTitle(),
+    );
     this.pushScalar('abstract', 'plain', this.getField('abstractNote'));
     this.pushScalar('fullCitation', 'plain', await this.getCitation(false));
     this.pushScalar('inTextCitation', 'plain', await this.getCitation(true));

@@ -31,6 +31,13 @@ export type TanaSyncData = {
    * unconditional rewrite buried a pile of nodes in the Tana trash every sync).
    */
   fields: Record<string, string>;
+  /**
+   * Network-free signature of the item's synced source content at the last sync
+   * (see `sync/content-signature.ts`). The sync-on-modify path compares the
+   * current signature against this to skip syncs that would be a no-op (edits to
+   * non-synced or volatile fields). Absent for items synced before this existed.
+   */
+  contentSig?: string;
   /** Zotero annotation key -> its Tana node state. */
   annotations: Record<string, StoredAnnotation>;
 };
@@ -65,6 +72,8 @@ function readSyncData(attachment: Zotero.Item): TanaSyncData | undefined {
     nodeId: parsed.nodeId,
     title: typeof parsed.title === 'string' ? parsed.title : '',
     fields: parseFields(parsed.fields),
+    contentSig:
+      typeof parsed.contentSig === 'string' ? parsed.contentSig : undefined,
     annotations: parseAnnotations(parsed.annotations),
   };
 }

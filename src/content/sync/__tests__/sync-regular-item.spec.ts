@@ -14,6 +14,12 @@ import { syncRegularItem } from '../sync-regular-item';
 
 vi.mock('../../tana/reference-builder');
 vi.mock('../../data/item-data');
+// Stub `contentSignature` (its own reference build is irrelevant here) while
+// keeping the real `fieldSignature` that the per-field diff under test relies on.
+vi.mock('../content-signature', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../content-signature')>()),
+  contentSignature: vi.fn().mockResolvedValue('test-content-sig'),
+}));
 
 const mockedBuildReference = vi.mocked(buildReference);
 const mockedGetTanaSyncData = vi.mocked(getTanaSyncData);
@@ -141,6 +147,7 @@ describe('syncRegularItem — create path', () => {
       nodeId: 'node1',
       title: 'Vaswani, 2017',
       fields: expectedFieldSignatures,
+      contentSig: 'test-content-sig',
       annotations: {},
     });
     expect(saveTanaTag).toHaveBeenCalledWith(item);
@@ -211,6 +218,7 @@ describe('syncRegularItem — update path', () => {
       nodeId: 'node1',
       title: 'Vaswani, 2017',
       fields: expectedFieldSignatures,
+      contentSig: 'test-content-sig',
       annotations: {},
     });
   });
@@ -240,6 +248,7 @@ describe('syncRegularItem — update path', () => {
       nodeId: 'node1',
       title: 'Vaswani, 2017',
       fields: expectedFieldSignatures,
+      contentSig: 'test-content-sig',
       annotations: {},
     });
   });
@@ -271,6 +280,12 @@ describe('syncRegularItem — update path', () => {
 
     // DOI was referenced -> left unchanged and reported
     expect(warnings).toEqual(['DOI']);
+    // The ownedBy search must not send `recursive` (the Local API rejects the
+    // string "true" a GET query carries; default is already recursive).
+    const ownedCall = client.search.mock.calls.find(
+      (call: unknown[]) => (call[0] as { ownedBy?: unknown })?.ownedBy,
+    );
+    expect(ownedCall?.[0].ownedBy).toEqual({ nodeId: 'node1' });
     const wroteDoi = client.setFieldContent.mock.calls.some(
       (call: unknown[]) => call[1] === FIELD.doi.id,
     );
@@ -386,6 +401,7 @@ describe('syncRegularItem — update path', () => {
       nodeId: 'fresh-node',
       title: 'Vaswani, 2017',
       fields: expectedFieldSignatures,
+      contentSig: 'test-content-sig',
       annotations: {},
     });
   });

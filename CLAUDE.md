@@ -60,13 +60,21 @@ enabled}] }`, persisted as JSON in the `schemaConfig` pref. `mergeSchemaConfig`
   maps title format, skips note items.
 - **`sync/sync-regular-item.ts`** — the upsert (reachability check, per-field
   diff, warn-and-skip; see decisions below).
+- **`sync/content-signature.ts`** — network-free signature of an item's synced
+  *source* fields (excludes `dateModified` / `year` / citations). The
+  sync-on-modify path skips a sync when it matches the last one, so edits to
+  non-synced or volatile fields don't trigger a pointless sync. `fieldSignature`
+  lives here.
+- **`sync/sync-config.ts`** — shared `getCitationFormat` / `getTitleFormat` pref
+  readers (split out so `content-signature` doesn't import `sync-job`).
 - **`sync/sync-annotations.ts`** — per-annotation upsert into `#quote` nodes.
 - **`tana/reference-builder.ts`, `tana/entities.ts`, `tana/tana-paste.ts`** —
   item → reference node (base-field reads, six title formats, live CSL via
   `Zotero.QuickCopy`) → creator bucketing/routing → Tana Paste serialization.
 
 The build toolchain (esbuild + vite-plus), Zotero scaffolding, and the
-collection / sync-on-modify services are inherited from Notero.
+collection service are inherited from Notero. `services/sync-manager.ts` (the
+debounce + the modify-path no-op skip) is Zotana's; see decisions below.
 
 ## Key design decisions
 
@@ -99,6 +107,14 @@ collection / sync-on-modify services are inherited from Notero.
   update path matches.
 - **Partial-date granularity** — emit `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` from
   Zotero's multipart SQL date; no season→month padding.
+- **Sync-on-modify = global debounce + content-signature no-op skip.**
+  `item.modify` fires for *any* edit, so the modify path compares
+  `contentSignature(item)` (source fields only) against the last sync and drops
+  no-ops before enqueuing. Surviving edits feed one **global** `SYNC_DEBOUNCE_MS`
+  (3 s) timer — a single batched job across all queued items, serialized by
+  `syncInProgress`; no per-item timers. A deselect-flush (sync on item-tree
+  `onSelect`) was tried and **removed**: `onSelect` also fires on our own
+  attachment writes, re-entering `performSync` and creating duplicate nodes.
 
 ## The Tana Local API
 
@@ -122,6 +138,11 @@ collection / sync-on-modify services are inherited from Notero.
   values; field-name emission is collision-safe (paste scopes field resolution to
   the applied supertag); REST `addField` creates **global** (not tag-private)
   field defs.
+- **Search rejects boolean query params.** `/nodes/search` validates booleans
+  strictly and 400s on the string `"true"` a GET query string carries (e.g.
+  `query[ownedBy][recursive]`) — numbers like `limit` *are* coerced, booleans are
+  not. Omit the boolean and rely on the documented default (`ownedBy.recursive`
+  defaults `true`).
 
 ## Known limitations
 
@@ -134,16 +155,16 @@ collection / sync-on-modify services are inherited from Notero.
 
 ## Open work
 
-- **Live end-to-end verification in Zotero** (not yet done): set token, pick the
-  workspace, click Create / refresh schema → confirm the tag + ~30 fields are
-  created with correct types and the entity seed options are gone; then sync an
-  item and confirm the Options entity fields populate by-id (no duplicates). Then
-  walk `docs/verify-in-zotero.md` Tests A–D plus the warn-and-skip and URL-render
-  paths.
-- **Unverified assumption:** that the REST `readNode` markdown carries the same
-  `<!-- node-id -->` comments the MCP read shows. The warn-and-skip parser
-  (`parseFieldNodeIds`) depends on it; if the format differs the check silently
-  no-ops and fields get overwritten. Confirm on the first live test.
+- **Live verification (2026-06-18, v0.2):** create, in-place update, annotations
+  → `#quote`, multi-item batches, and the sync-on-modify no-op skip all confirmed
+  against a real Zotero + Tana. The REST `readNode` markdown **does** carry the
+  `<!-- node-id -->` comments the warn-and-skip parser needs (previously unproven).
+  Still unwalked live: Test D (purged-node rebuild) and the URL-render path.
+- **`pnpm build` / `pnpm start` EMFILE on this machine:** the chokidar asset-copy
+  step (`scripts/utils/copy-assets.mts`) blows the macOS `fs.watch` limit and never
+  copies `locale/` + `*.xhtml` + `*.css` into `build/` — so a dev load shows blank
+  labels and an empty prefs pane. Until copy-assets is de-chokidar'd, copy those
+  assets in manually after a build. `pnpm create-xpi` is unaffected.
 - **Rich-text note syncing** — deferred. `sync-job` skips note items; supporting
   them needs an HTML→Tana-Paste converter (Notero's `html-to-notion` is the
   reference).

@@ -39,7 +39,8 @@ export type FieldKey =
   | 'dateAdded'
   | 'dateModified'
   | 'filePath'
-  | 'shortTitle';
+  | 'shortTitle'
+  | 'title';
 
 /** Supertag a reference links to for people/orgs. Fixed (not user-renamable). */
 export type EntityTag = 'Person' | 'Organization';
@@ -166,6 +167,7 @@ export const CATALOG: CatalogEntry[] = [
     multiValue: true,
     transientSeed: true,
   },
+  { key: 'title', defaultName: 'Title', dataType: 'plain' },
   { key: 'typeDetail', defaultName: 'Type Detail', dataType: 'plain' },
   { key: 'url', defaultName: 'URL', dataType: 'url' },
   { key: 'volume', defaultName: 'Volume', dataType: 'plain' },

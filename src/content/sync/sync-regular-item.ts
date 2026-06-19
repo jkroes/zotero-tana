@@ -10,12 +10,12 @@ import { buildReference } from '../tana/reference-builder';
 import type { ResolvedSchema } from '../tana/schema';
 import {
   toTanaPaste,
-  type TanaField,
   type TanaLink,
   type TanaReferenceNode,
 } from '../tana/tana-paste';
 import { logger } from '../utils';
 
+import { contentSignature, fieldSignature } from './content-signature';
 import { syncAnnotations } from './sync-annotations';
 import type { SyncJobParams } from './sync-job';
 
@@ -79,31 +79,22 @@ export async function syncRegularItem(
     existing?.annotations ?? {},
   );
 
+  // Tag the item first so its content signature is computed at steady state:
+  // `saveTanaTag` adds the `tana` tag, which `getTags()` (and thus the signature)
+  // includes. Snapshotting before it would differ from every later modify-path
+  // computation, forcing one needless re-sync. (skipNotifier → no sync loop.)
+  await saveTanaTag(item);
   await saveTanaSyncData(item, {
     nodeId,
     title: node.title,
     fields: signatures,
+    // Network-free snapshot of the synced source content, recomputed with the
+    // same helper the modify path uses so a no-op edit produces an equal value.
+    contentSig: await contentSignature(item),
     annotations,
   });
-  await saveTanaTag(item);
 
   return referencedFields;
-}
-
-/**
- * A stable string representation of a field's current value, used to detect
- * whether a re-sync needs to rewrite it. Scalar fields compare by their value;
- * link fields compare by their `tag:name` list (names, not resolved node IDs, so
- * an unchanged author list skips both resolution and the write).
- */
-function fieldSignature(field: TanaField): string {
-  if (field.type === 'links') {
-    return field.links.map((link) => `${link.tag}:${link.name}`).join(' ');
-  }
-  if (field.type === 'optionList') {
-    return field.values.join('\n');
-  }
-  return field.value;
 }
 
 /** Signatures for every writable field (the back-link is immutable, excluded). */
@@ -335,15 +326,19 @@ function willWriteOrClear(
   );
 }
 
-/** The ids of every node this reference owns (its field values + annotations). */
+/**
+ * The ids of every node this reference owns (its field values + annotations).
+ *
+ * `recursive` is omitted deliberately: the Local API validates it as a real
+ * boolean and rejects the string `"true"` that a GET query string carries (400
+ * "expected boolean, received string"), with no coercion. Its documented default
+ * is already `true`, so omitting it gives the recursive set we want.
+ */
 async function ownedNodeIds(
   client: TanaClient,
   nodeId: string,
 ): Promise<Set<string>> {
-  const owned = await client.search(
-    { ownedBy: { nodeId, recursive: true } },
-    { limit: 1000 },
-  );
+  const owned = await client.search({ ownedBy: { nodeId } }, { limit: 1000 });
   return new Set(owned.map((node) => node.id));
 }
 

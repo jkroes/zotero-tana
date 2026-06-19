@@ -14,14 +14,20 @@ import {
   mockZoteroPrefs,
   zoteroMock,
 } from '../../../../test/utils';
+import { getTanaSyncData } from '../../data/item-data';
 import { saveSyncConfigs } from '../../prefs/collection-sync-config';
 import { ZotanaPref, setZotanaPref } from '../../prefs/zotana-pref';
+import { contentSignature } from '../../sync/content-signature';
 import { performSyncJob } from '../../sync/sync-job';
 import { EventManager, SyncManager } from '../index';
 
 vi.mock('../../sync/sync-job');
+vi.mock('../../sync/content-signature');
+vi.mock('../../data/item-data');
 
 const mockedPerformSyncJob = vi.mocked(performSyncJob);
+const mockedContentSignature = vi.mocked(contentSignature);
+const mockedGetTanaSyncData = vi.mocked(getTanaSyncData);
 
 const pluginInfo = {
   pluginID: 'test',
@@ -50,6 +56,14 @@ regularItem.addToCollection(collection.id);
 deletedItem.addToCollection(collection.id);
 
 const fakeTagID = 1234;
+
+const storedData = (contentSig: string) => ({
+  nodeId: 'node-1',
+  title: 'Title',
+  fields: {},
+  contentSig,
+  annotations: {},
+});
 
 function setup({
   collectionSyncEnabled = true,
@@ -169,12 +183,12 @@ describe('SyncManager', () => {
       expect(performSyncJob).toHaveBeenCalledTimes(0);
     });
 
-    it('syncs regular items in collection when enabled', () => {
+    it('syncs regular items in collection when enabled', async () => {
       const { eventManager } = setup();
 
       eventManager.emit('notifier-event', 'collection.modify', [collection.id]);
 
-      vi.runAllTimers();
+      await vi.runAllTimersAsync();
 
       expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
         new Set([regularItem.id]),
@@ -195,14 +209,14 @@ describe('SyncManager', () => {
       expect(performSyncJob).toHaveBeenCalledTimes(0);
     });
 
-    it('syncs the added item even when `syncOnModifyItems` is disabled', () => {
+    it('syncs the added item even when `syncOnModifyItems` is disabled', async () => {
       const { eventManager } = setup({ syncOnModifyItems: false });
 
       eventManager.emit('notifier-event', 'collection-item.add', [
         [collection.id, regularItem.id],
       ]);
 
-      vi.runAllTimers();
+      await vi.runAllTimersAsync();
 
       expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
         new Set([regularItem.id]),
@@ -243,12 +257,12 @@ describe('SyncManager', () => {
       expect(performSyncJob).toHaveBeenCalledTimes(0);
     });
 
-    it('syncs item when enabled and item is in sync-enabled collection', () => {
+    it('syncs item when enabled and item is in sync-enabled collection', async () => {
       const { eventManager } = setup();
 
       eventManager.emit('notifier-event', 'item.modify', [regularItem.id]);
 
-      vi.runAllTimers();
+      await vi.runAllTimersAsync();
 
       expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
         new Set([regularItem.id]),
@@ -269,14 +283,14 @@ describe('SyncManager', () => {
       expect(performSyncJob).toHaveBeenCalledTimes(0);
     });
 
-    it('syncs item when enabled and item is in sync-enabled collection', () => {
+    it('syncs item when enabled and item is in sync-enabled collection', async () => {
       const { eventManager } = setup();
 
       eventManager.emit('notifier-event', 'item-tag.modify', [
         [regularItem.id, fakeTagID],
       ]);
 
-      vi.runAllTimers();
+      await vi.runAllTimersAsync();
 
       expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
         new Set([regularItem.id]),
@@ -284,15 +298,54 @@ describe('SyncManager', () => {
     });
   });
 
+  describe('no-op skip on the modify path', () => {
+    it('skips sync when synced content is unchanged', async () => {
+      const { eventManager } = setup();
+      mockedGetTanaSyncData.mockReturnValueOnce(storedData('same-sig'));
+      mockedContentSignature.mockResolvedValueOnce('same-sig');
+
+      eventManager.emit('notifier-event', 'item.modify', [regularItem.id]);
+      await vi.runAllTimersAsync();
+
+      expect(performSyncJob).toHaveBeenCalledTimes(0);
+    });
+
+    it('syncs when synced content changed', async () => {
+      const { eventManager } = setup();
+      mockedGetTanaSyncData.mockReturnValueOnce(storedData('old-sig'));
+      mockedContentSignature.mockResolvedValueOnce('new-sig');
+
+      eventManager.emit('notifier-event', 'item.modify', [regularItem.id]);
+      await vi.runAllTimersAsync();
+
+      expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
+        new Set([regularItem.id]),
+      );
+    });
+
+    it('syncs an item with no stored signature', async () => {
+      const { eventManager } = setup();
+      mockedGetTanaSyncData.mockReturnValueOnce(undefined);
+
+      eventManager.emit('notifier-event', 'item.modify', [regularItem.id]);
+      await vi.runAllTimersAsync();
+
+      expect(mockedContentSignature).not.toHaveBeenCalled();
+      expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
+        new Set([regularItem.id]),
+      );
+    });
+  });
+
   describe('receiving `item-tag.remove` notifier event', () => {
-    it('syncs item when enabled and item is in sync-enabled collection', () => {
+    it('syncs item when enabled and item is in sync-enabled collection', async () => {
       const { eventManager } = setup();
 
       eventManager.emit('notifier-event', 'item-tag.remove', [
         [regularItem.id, fakeTagID],
       ]);
 
-      vi.runAllTimers();
+      await vi.runAllTimersAsync();
 
       expect(mockedPerformSyncJob.mock.lastCall?.[0]).toStrictEqual(
         new Set([regularItem.id]),
