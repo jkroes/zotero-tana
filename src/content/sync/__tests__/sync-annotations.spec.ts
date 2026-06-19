@@ -8,7 +8,12 @@ import { syncAnnotations } from '../sync-annotations';
 
 vi.mock('../annotations');
 
-const QUOTE_TAG_ID = 'quote-tag-id';
+const annotationTags = {
+  highlight: { tagId: 'highlight-tag', annotationFieldId: 'hl-field' },
+  comment: { tagId: 'comment-tag', annotationFieldId: 'cm-field' },
+  image: { tagId: 'image-tag', annotationFieldId: 'im-field' },
+};
+
 const mockedReadItemAnnotations = vi.mocked(readItemAnnotations);
 
 function createClientMock() {
@@ -27,7 +32,7 @@ function run(
 ) {
   return syncAnnotations(
     client as unknown as TanaClient,
-    QUOTE_TAG_ID,
+    annotationTags,
     createZoteroItemMock({}),
     'ref-node',
     stored,
@@ -38,7 +43,9 @@ const highlight: AnnotationNode = {
   key: 'AAA',
   name: 'A highlighted sentence',
   description: 'with a comment',
-  tagId: QUOTE_TAG_ID,
+  tagId: 'highlight-tag',
+  annotationFieldId: 'hl-field',
+  link: 'zotero://open-pdf/library/items/ATT?annotation=AAA',
 };
 
 beforeEach(() => {
@@ -46,16 +53,17 @@ beforeEach(() => {
 });
 
 describe('syncAnnotations — create', () => {
-  it('imports a #quote node under the reference and sets text + comment', async () => {
+  it('imports a #highlight node with the back-link field and sets text + comment', async () => {
     const client = createClientMock();
     mockedReadItemAnnotations.mockReturnValue([highlight]);
 
     const result = await run(client, {});
 
-    expect(client.import).toHaveBeenCalledWith(
-      'ref-node',
-      expect.stringContaining('#[[^' + QUOTE_TAG_ID + ']]'),
-    );
+    expect(client.import).toHaveBeenCalledWith('ref-node', expect.any(String));
+    const paste = client.import.mock.calls[0]?.[1] as string;
+    expect(paste).toContain('#[[^highlight-tag]]');
+    // back-link written as a clickable markdown link under the Annotation field
+    expect(paste).toContain('[[^hl-field]]:: [' + highlight.link + ']');
     expect(client.update).toHaveBeenCalledWith('new-node', {
       name: 'A highlighted sentence',
       description: 'with a comment',
@@ -69,18 +77,24 @@ describe('syncAnnotations — create', () => {
     });
   });
 
-  it('imports an untagged node (no supertag) for a note annotation', async () => {
+  it('imports a #comment node with the back-link field for a note annotation', async () => {
     const client = createClientMock();
     mockedReadItemAnnotations.mockReturnValue([
-      { key: 'N1', name: 'a note', description: '', tagId: null },
+      {
+        key: 'N1',
+        name: 'a note',
+        description: '',
+        tagId: 'comment-tag',
+        annotationFieldId: 'cm-field',
+        link: 'zotero://open-pdf/library/items/ATT?annotation=N1',
+      },
     ]);
 
     await run(client, {});
 
-    expect(client.import).toHaveBeenCalledWith(
-      'ref-node',
-      expect.not.stringContaining('#[[^'),
-    );
+    const paste = client.import.mock.calls[0]?.[1] as string;
+    expect(paste).toContain('#[[^comment-tag]]');
+    expect(paste).toContain('[[^cm-field]]::');
     // no comment -> description omitted
     expect(client.update).toHaveBeenCalledWith('new-node', { name: 'a note' });
   });
@@ -134,7 +148,7 @@ describe('syncAnnotations — update in place', () => {
     // falls back to a fresh import + literal name/description write
     expect(client.import).toHaveBeenCalledWith(
       'ref-node',
-      expect.stringContaining('#[[^' + QUOTE_TAG_ID + ']]'),
+      expect.stringContaining('#[[^highlight-tag]]'),
     );
     expect(result.AAA?.nodeId).toBe('new-node');
   });

@@ -17,6 +17,8 @@
 import type { StoredAnnotation } from '../data/item-data';
 import { LocalizableError } from '../errors';
 import { TanaApiError, type TanaClient } from '../tana/client';
+import type { AnnotationKind } from '../tana/constants';
+import type { ResolvedAnnotationTag } from '../tana/schema';
 import { logger } from '../utils';
 
 import { readItemAnnotations, type AnnotationNode } from './annotations';
@@ -26,12 +28,12 @@ const PLACEHOLDER_NAME = 'Zotana annotation';
 
 export async function syncAnnotations(
   client: TanaClient,
-  quoteTagId: string,
+  annotationTags: Record<AnnotationKind, ResolvedAnnotationTag>,
   item: Zotero.Item,
   referenceNodeId: string,
   stored: Record<string, StoredAnnotation>,
 ): Promise<Record<string, StoredAnnotation>> {
-  const current = readItemAnnotations(item, quoteTagId);
+  const current = readItemAnnotations(item, annotationTags);
   const result: Record<string, StoredAnnotation> = {};
 
   for (const annotation of current) {
@@ -68,11 +70,21 @@ async function createAnnotationNode(
   referenceNodeId: string,
   annotation: AnnotationNode,
 ): Promise<string> {
-  const tag = annotation.tagId ? ` #[[^${annotation.tagId}]]` : '';
-  const paste = `%%tana%%\n- ${PLACEHOLDER_NAME}${tag}`;
+  // Carry the back-link in the paste (as a markdown link, so it imports as a
+  // clickable URL node) under the tag's Annotation field. The link is stable per
+  // annotation, so it's only ever written here — never on the update path.
+  const paste = [
+    '%%tana%%',
+    `- ${PLACEHOLDER_NAME} #[[^${annotation.tagId}]]`,
+    `  - [[^${annotation.annotationFieldId}]]:: [${annotation.link}](${annotation.link})`,
+  ].join('\n');
   const { createdNodes } = await client.import(referenceNodeId, paste);
 
-  const created = createdNodes.find(({ name }) => name) ?? createdNodes[0];
+  // The annotation node is the placeholder-named one (the field-value node the
+  // paste also creates carries the URL as its name, so don't match the first name).
+  const created =
+    createdNodes.find(({ name }) => name === PLACEHOLDER_NAME) ??
+    createdNodes[0];
   if (!created) {
     throw new LocalizableError(
       `Tana import did not return a node ID for annotation ${annotation.key}`,

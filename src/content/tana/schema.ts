@@ -12,16 +12,24 @@ import type { SchemaConfig } from '../prefs/schema-config';
 
 import { TanaClient } from './client';
 import {
+  ANNOTATION_FIELD_NAME,
+  ANNOTATION_TAG_NAMES,
   CATALOG_BY_KEY,
   ENTITY_TAG_NAMES,
-  QUOTE_TAG_NAME,
   effectiveFieldName,
+  type AnnotationKind,
   type CatalogEntry,
   type EntityTag,
   type FieldKey,
 } from './constants';
 
 export type ResolvedField = { name: string; id: string };
+
+/** A resolved annotation supertag plus its `Annotation` back-link field id. */
+export type ResolvedAnnotationTag = {
+  tagId: string;
+  annotationFieldId: string;
+};
 
 /**
  * Placeholder option used to satisfy the REST API's "options need ≥1 seed"
@@ -35,7 +43,8 @@ export type ResolvedSchema = {
   tagId: string;
   tagName: string;
   entityTagIds: Record<EntityTag, string>;
-  quoteTagId: string;
+  /** Annotation supertags (highlight/comment/image) + each one's link field id. */
+  annotationTags: Record<AnnotationKind, ResolvedAnnotationTag>;
   /** Enabled fields only: catalog key -> resolved name + attribute id. */
   fields: Partial<Record<FieldKey, ResolvedField>>;
 };
@@ -95,7 +104,6 @@ export async function ensureSchema(
     Person: await resolveOrCreateTag(ENTITY_TAG_NAMES.Person),
     Organization: await resolveOrCreateTag(ENTITY_TAG_NAMES.Organization),
   };
-  const quoteTagId = await resolveOrCreateTag(QUOTE_TAG_NAME);
 
   const existingFields = parseTagSchemaFields(await client.getTagSchema(tagId));
 
@@ -133,12 +141,37 @@ export async function ensureSchema(
     for (const seedId of seedIds) await client.trash(seedId);
   }
 
+  // Annotation tags (highlight/comment/image), each with an `Annotation` URL
+  // field for the PDF back-link. Independent of the reference fields above, so
+  // resolved last. The field is keyed off each tag's own schema markdown, so
+  // re-running is idempotent even though addField makes a global def.
+  const resolveAnnotationTag = async (
+    name: string,
+  ): Promise<ResolvedAnnotationTag> => {
+    const annTagId = await resolveOrCreateTag(name);
+    const annFields = parseTagSchemaFields(await client.getTagSchema(annTagId));
+    let annotationFieldId = annFields.get(ANNOTATION_FIELD_NAME);
+    if (!annotationFieldId) {
+      const created = await client.addField(annTagId, {
+        name: ANNOTATION_FIELD_NAME,
+        dataType: 'url',
+      });
+      annotationFieldId = created.fieldId;
+    }
+    return { tagId: annTagId, annotationFieldId };
+  };
+  const annotationTags: Record<AnnotationKind, ResolvedAnnotationTag> = {
+    highlight: await resolveAnnotationTag(ANNOTATION_TAG_NAMES.highlight),
+    comment: await resolveAnnotationTag(ANNOTATION_TAG_NAMES.comment),
+    image: await resolveAnnotationTag(ANNOTATION_TAG_NAMES.image),
+  };
+
   return {
     workspaceId,
     tagId,
     tagName: config.tagName,
     entityTagIds,
-    quoteTagId,
+    annotationTags,
     fields,
   };
 }

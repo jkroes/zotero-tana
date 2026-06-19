@@ -204,8 +204,26 @@ export const ENTITY_TAG_NAMES: Record<EntityTag, string> = {
   Organization: 'Organization',
 };
 
-/** Bare tag (no fields) applied to highlight/underline annotation quote nodes. */
-export const QUOTE_TAG_NAME = 'quote';
+/**
+ * Supertags applied to synced annotation nodes, by Zotero annotation kind:
+ * highlight/underline → `highlight`, note/text → `comment`, image → `image`.
+ * Fixed names (like the entity tags), not user-renamable.
+ */
+export const ANNOTATION_TAG_NAMES = {
+  highlight: 'highlight',
+  comment: 'comment',
+  image: 'image',
+} as const;
+
+export type AnnotationKind = keyof typeof ANNOTATION_TAG_NAMES;
+
+/**
+ * URL field created on every annotation tag, holding a `zotero://open-pdf` deep
+ * link back to the annotation in its PDF. Written in the create-time paste so it
+ * renders clickable; stable per annotation, so never rewritten (see the URL-render
+ * limitation in tana-paste).
+ */
+export const ANNOTATION_FIELD_NAME = 'Annotation';
 
 /** Tag applied to synced Zotero items so they can be filtered/found. */
 export const TANA_TAG_NAME = 'tana';

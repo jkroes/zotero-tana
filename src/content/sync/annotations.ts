@@ -3,17 +3,23 @@
  * it should become. Pure of any Tana I/O — `sync-annotations.ts` consumes these.
  *
  * Mapping (decided with the user):
- *   - highlight / underline -> #quote node; name = selected text, the comment
+ *   - highlight / underline -> #highlight node; name = selected text, the comment
  *     becomes the node's *description*.
- *   - note / text           -> plain (untagged) node; name = the typed content.
- *   - image                 -> plain placeholder node ("Image annotation (p. N)");
+ *   - note / text           -> #comment node; name = the typed content.
+ *   - image                 -> #image placeholder node ("Image annotation (p. N)");
  *                              comment, if any, becomes the description.
  *   - ink                   -> skipped (no text content).
+ *
+ * Every node also carries an `Annotation` URL field with a `zotero://open-pdf`
+ * deep link back to the annotation in its PDF.
  *
  * `annotationText` is only populated for highlight/underline; every other type
  * carries its content in `annotationComment` (mirrors Zotero's own display-title
  * logic in data/item.js).
  */
+
+import type { AnnotationKind } from '../tana/constants';
+import type { ResolvedAnnotationTag } from '../tana/schema';
 
 export type AnnotationNode = {
   /** Stable Zotero annotation key — the per-annotation upsert key. */
@@ -22,9 +28,30 @@ export type AnnotationNode = {
   name: string;
   /** Node description (the annotation comment); empty string when none. */
   description: string;
-  /** Supertag to apply (the resolved quote tag id), or null for a plain node. */
-  tagId: string | null;
+  /** Annotation supertag to apply (highlight/comment/image). */
+  tagId: string;
+  /** The tag's `Annotation` URL field id. */
+  annotationFieldId: string;
+  /** `zotero://open-pdf/...?annotation=KEY` deep link to the annotation. */
+  link: string;
 };
+
+/**
+ * `zotero://open-pdf` deep link to an annotation, derived from its PDF
+ * attachment. Mirrors the group-vs-library handling in reference-builder's
+ * `zoteroLink` (Zotero.Libraries is absent from the bundled type defs).
+ */
+function annotationLink(
+  attachment: Zotero.Item,
+  annotationKey: string,
+): string {
+  const uri = Zotero.URI.getItemURI(attachment);
+  const groupMatch = uri.match(/\/groups\/(\d+)\/items\//);
+  const base = groupMatch
+    ? `zotero://open-pdf/groups/${groupMatch[1]}/items/${attachment.key}`
+    : `zotero://open-pdf/library/items/${attachment.key}`;
+  return `${base}?annotation=${annotationKey}`;
+}
 
 /**
  * Strip any inline HTML from a Zotero annotation field and collapse whitespace.
@@ -40,27 +67,41 @@ function htmlToPlainText(html: string): string {
 /** Normalize a single Zotero annotation item, or return null to skip it. */
 export function buildAnnotationNode(
   annotation: Zotero.Item,
-  quoteTagId: string,
+  attachment: Zotero.Item,
+  annotationTags: Record<AnnotationKind, ResolvedAnnotationTag>,
 ): AnnotationNode | null {
   const key = annotation.key;
   const comment = htmlToPlainText(annotation.annotationComment);
+
+  const make = (
+    kind: AnnotationKind,
+    name: string,
+    description: string,
+  ): AnnotationNode => ({
+    key,
+    name,
+    description,
+    tagId: annotationTags[kind].tagId,
+    annotationFieldId: annotationTags[kind].annotationFieldId,
+    link: annotationLink(attachment, key),
+  });
 
   switch (annotation.annotationType) {
     case 'highlight':
     case 'underline': {
       const text = htmlToPlainText(annotation.annotationText);
       if (!text) return null;
-      return { key, name: text, description: comment, tagId: quoteTagId };
+      return make('highlight', text, comment);
     }
     case 'note':
     case 'text': {
       if (!comment) return null;
-      return { key, name: comment, description: '', tagId: null };
+      return make('comment', comment, '');
     }
     case 'image': {
       const page = annotation.annotationPageLabel;
       const name = page ? `Image annotation (p. ${page})` : 'Image annotation';
-      return { key, name, description: comment, tagId: null };
+      return make('image', name, comment);
     }
     default:
       // 'ink' (and any future type) has no text content — skip.
@@ -75,22 +116,30 @@ export function buildAnnotationNode(
  */
 export function readItemAnnotations(
   item: Zotero.Item,
-  quoteTagId: string,
+  annotationTags: Record<AnnotationKind, ResolvedAnnotationTag>,
 ): AnnotationNode[] {
   const attachments = Zotero.Items.get(item.getAttachments(false));
 
-  const annotations: Zotero.Item[] = [];
+  // Keep each annotation paired with its attachment — the back-link needs the
+  // attachment's key/library.
+  const pairs: { annotation: Zotero.Item; attachment: Zotero.Item }[] = [];
   for (const attachment of attachments) {
     if (attachment.isFileAttachment()) {
-      annotations.push(...attachment.getAnnotations(false));
+      for (const annotation of attachment.getAnnotations(false)) {
+        pairs.push({ annotation, attachment });
+      }
     }
   }
 
-  annotations.sort((a, b) =>
-    a.annotationSortIndex.localeCompare(b.annotationSortIndex),
+  pairs.sort((a, b) =>
+    a.annotation.annotationSortIndex.localeCompare(
+      b.annotation.annotationSortIndex,
+    ),
   );
 
-  return annotations
-    .map((annotation) => buildAnnotationNode(annotation, quoteTagId))
+  return pairs
+    .map(({ annotation, attachment }) =>
+      buildAnnotationNode(annotation, attachment, annotationTags),
+    )
     .filter((node): node is AnnotationNode => node !== null);
 }

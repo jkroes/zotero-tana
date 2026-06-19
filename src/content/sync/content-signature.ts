@@ -103,12 +103,17 @@ function localSchema(config: SchemaConfig): ResolvedSchema {
     Person: '',
     Organization: '',
   };
+  const emptyAnnotationTag = { tagId: '', annotationFieldId: '' };
   return {
     workspaceId: '',
     tagId: '',
     tagName: config.tagName,
     entityTagIds,
-    quoteTagId: '',
+    annotationTags: {
+      highlight: emptyAnnotationTag,
+      comment: emptyAnnotationTag,
+      image: emptyAnnotationTag,
+    },
     fields,
   };
 }

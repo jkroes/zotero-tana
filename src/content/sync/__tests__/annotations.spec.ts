@@ -1,37 +1,57 @@
-import { describe, expect, it } from 'vite-plus/test';
+import { beforeEach, describe, expect, it } from 'vite-plus/test';
 
-import { createZoteroItemMock } from '../../../../test/utils';
+import { createZoteroItemMock, zoteroMock } from '../../../../test/utils';
 import { buildAnnotationNode, readItemAnnotations } from '../annotations';
 
-const QUOTE_TAG_ID = 'quote-tag-id';
+const annotationTags = {
+  highlight: { tagId: 'highlight-tag', annotationFieldId: 'hl-field' },
+  comment: { tagId: 'comment-tag', annotationFieldId: 'cm-field' },
+  image: { tagId: 'image-tag', annotationFieldId: 'im-field' },
+};
+
+// A PDF attachment the annotations belong to; its key drives the back-link.
+const attachment = createZoteroItemMock();
+
+const openPdfLink = (annotationKey: string) =>
+  `zotero://open-pdf/library/items/${attachment.key}?annotation=${annotationKey}`;
 
 function annotation(props: Partial<Zotero.Item>): Zotero.Item {
   return createZoteroItemMock(props);
 }
 
+beforeEach(() => {
+  // A user-library URI (no /groups/) → the library branch of the back-link.
+  zoteroMock.URI.getItemURI.mockReturnValue(
+    'http://zotero.org/users/local/ZswAJ4Qe/items/ATTACHKEY',
+  );
+});
+
 describe('buildAnnotationNode', () => {
-  it('maps a highlight to a #quote node, comment as description', () => {
+  it('maps a highlight to a #highlight node, comment as description', () => {
     const a = annotation({
       annotationType: 'highlight',
       annotationText: 'The selected text',
       annotationComment: 'my note',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toEqual({
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
       name: 'The selected text',
       description: 'my note',
-      tagId: QUOTE_TAG_ID,
+      tagId: 'highlight-tag',
+      annotationFieldId: 'hl-field',
+      link: openPdfLink(a.key),
     });
   });
 
-  it('maps an underline to a #quote node too', () => {
+  it('maps an underline to a #highlight node too', () => {
     const a = annotation({
       annotationType: 'underline',
       annotationText: 'underlined',
       annotationComment: '',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)?.tagId).toBe(QUOTE_TAG_ID);
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)?.description).toBe('');
+    const node = buildAnnotationNode(a, attachment, annotationTags);
+    expect(node?.tagId).toBe('highlight-tag');
+    expect(node?.description).toBe('');
   });
 
   it('strips HTML and collapses whitespace in the text', () => {
@@ -40,7 +60,9 @@ describe('buildAnnotationNode', () => {
       annotationText: '<b>Hello</b>\n   world',
       annotationComment: '',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)?.name).toBe('Hello world');
+    expect(buildAnnotationNode(a, attachment, annotationTags)?.name).toBe(
+      'Hello world',
+    );
   });
 
   it('skips a highlight with no text', () => {
@@ -49,20 +71,22 @@ describe('buildAnnotationNode', () => {
       annotationText: '',
       annotationComment: 'orphan comment',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toBeNull();
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toBeNull();
   });
 
-  it('maps a note annotation to an untagged node named by its comment', () => {
+  it('maps a note annotation to a #comment node named by its comment', () => {
     const a = annotation({
       annotationType: 'note',
       annotationText: '',
       annotationComment: 'a standalone note',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toEqual({
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
       name: 'a standalone note',
       description: '',
-      tagId: null,
+      tagId: 'comment-tag',
+      annotationFieldId: 'cm-field',
+      link: openPdfLink(a.key),
     });
   });
 
@@ -72,21 +96,23 @@ describe('buildAnnotationNode', () => {
       annotationText: '',
       annotationComment: '',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toBeNull();
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toBeNull();
   });
 
-  it('maps an image annotation to a placeholder with the page label', () => {
+  it('maps an image annotation to a #image placeholder with the page label', () => {
     const a = annotation({
       annotationType: 'image',
       annotationText: '',
       annotationComment: 'figure 2',
       annotationPageLabel: '12',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toEqual({
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
       name: 'Image annotation (p. 12)',
       description: 'figure 2',
-      tagId: null,
+      tagId: 'image-tag',
+      annotationFieldId: 'im-field',
+      link: openPdfLink(a.key),
     });
   });
 
@@ -97,12 +123,28 @@ describe('buildAnnotationNode', () => {
       annotationComment: '',
       annotationPageLabel: '',
     });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)?.name).toBe('Image annotation');
+    expect(buildAnnotationNode(a, attachment, annotationTags)?.name).toBe(
+      'Image annotation',
+    );
+  });
+
+  it('builds a group-library back-link from a /groups/ URI', () => {
+    zoteroMock.URI.getItemURI.mockReturnValue(
+      'http://zotero.org/groups/123456/items/ATTACHKEY',
+    );
+    const a = annotation({
+      annotationType: 'highlight',
+      annotationText: 'grouped',
+      annotationComment: '',
+    });
+    expect(buildAnnotationNode(a, attachment, annotationTags)?.link).toBe(
+      `zotero://open-pdf/groups/123456/items/${attachment.key}?annotation=${a.key}`,
+    );
   });
 
   it('skips ink annotations', () => {
     const a = annotation({ annotationType: 'ink' });
-    expect(buildAnnotationNode(a, QUOTE_TAG_ID)).toBeNull();
+    expect(buildAnnotationNode(a, attachment, annotationTags)).toBeNull();
   });
 });
 
@@ -135,7 +177,7 @@ describe('readItemAnnotations', () => {
     const item = createZoteroItemMock({});
     item.getAttachments.mockReturnValue([fileAttachment.id, linkAttachment.id]);
 
-    const result = readItemAnnotations(item, QUOTE_TAG_ID);
+    const result = readItemAnnotations(item, annotationTags);
     expect(result.map((node) => node.name)).toEqual([
       'A comes first',
       'B comes second',
@@ -144,6 +186,6 @@ describe('readItemAnnotations', () => {
 
   it('returns nothing for an item with no attachments', () => {
     const item = createZoteroItemMock({});
-    expect(readItemAnnotations(item, QUOTE_TAG_ID)).toEqual([]);
+    expect(readItemAnnotations(item, annotationTags)).toEqual([]);
   });
 });

@@ -30,7 +30,6 @@ const TAG = {
   reference: 'tag-ref',
   Person: 'tag-person',
   Organization: 'tag-org',
-  quote: 'tag-quote',
 };
 
 const FIELD = {
@@ -47,7 +46,11 @@ const schema: ResolvedSchema = {
   tagId: TAG.reference,
   tagName: 'reference',
   entityTagIds: { Person: TAG.Person, Organization: TAG.Organization },
-  quoteTagId: TAG.quote,
+  annotationTags: {
+    highlight: { tagId: 'tag-highlight', annotationFieldId: 'fid-hl' },
+    comment: { tagId: 'tag-comment', annotationFieldId: 'fid-cm' },
+    image: { tagId: 'tag-image', annotationFieldId: 'fid-im' },
+  },
   fields: {
     item: FIELD.item,
     doi: FIELD.doi,

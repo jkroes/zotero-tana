@@ -65,7 +65,7 @@ const config: SchemaConfig = {
 };
 
 describe('ensureSchema — bootstrap (nothing exists)', () => {
-  it('creates the tag + entity/quote tags, creates enabled fields, and trashes entity seeds', async () => {
+  it('creates the tag + entity/annotation tags, creates enabled fields, and trashes entity seeds', async () => {
     const client = createClientMock();
     // First schema read (existing fields) is empty; the post-create read exposes
     // the entity field's seed option to trash.
@@ -83,7 +83,13 @@ describe('ensureSchema — bootstrap (nothing exists)', () => {
     expect(schema.tagId).toBe('tag-zotero');
     expect(schema.entityTagIds.Person).toBe('tag-Person');
     expect(schema.entityTagIds.Organization).toBe('tag-Organization');
-    expect(schema.quoteTagId).toBe('tag-quote');
+    // annotation tags + their Annotation back-link field
+    expect(schema.annotationTags.highlight).toEqual({
+      tagId: 'tag-highlight',
+      annotationFieldId: 'field-Annotation',
+    });
+    expect(schema.annotationTags.comment.tagId).toBe('tag-comment');
+    expect(schema.annotationTags.image.tagId).toBe('tag-image');
 
     // enabled fields resolved; disabled field absent
     expect(schema.fields.creators).toEqual({
@@ -118,6 +124,15 @@ describe('ensureSchema — bootstrap (nothing exists)', () => {
     // plain field has no options
     expect(byName('Abstract')).toMatchObject({ dataType: 'plain' });
     expect(byName('Abstract')?.options).toBeUndefined();
+
+    // each annotation tag got a URL Annotation field
+    expect(byName('Annotation')).toMatchObject({ dataType: 'url' });
+    expect(
+      addCalls.filter(
+        (call: unknown[]) =>
+          (call[1] as { name: string }).name === 'Annotation',
+      ),
+    ).toHaveLength(3);
 
     // the entity seed option was trashed
     expect(client.trash).toHaveBeenCalledWith('seed-1');
@@ -157,14 +172,21 @@ describe('ensureSchema — resolve (everything exists)', () => {
       { id: 'tag-zotero', name: 'zotero' },
       { id: 'tag-Person', name: 'Person' },
       { id: 'tag-Organization', name: 'Organization' },
-      { id: 'tag-quote', name: 'quote' },
+      { id: 'tag-highlight', name: 'highlight' },
+      { id: 'tag-comment', name: 'comment' },
+      { id: 'tag-image', name: 'image' },
     ]);
-    client.getTagSchema.mockResolvedValue(
-      [
-        '- **Creators** (id:field-Creators):: Options',
-        '- **Item Type** (id:field-ItemType):: Options',
-        '- **Abstract** (id:field-Abstract):: Content',
-      ].join('\n'),
+    // Reference tag exposes its fields; each annotation tag already has Annotation.
+    client.getTagSchema.mockImplementation((tagId: string) =>
+      Promise.resolve(
+        tagId === 'tag-zotero'
+          ? [
+              '- **Creators** (id:field-Creators):: Options',
+              '- **Item Type** (id:field-ItemType):: Options',
+              '- **Abstract** (id:field-Abstract):: Content',
+            ].join('\n')
+          : '- **Annotation** (id:field-Annotation):: URL',
+      ),
     );
 
     const schema = await ensureSchema(client as unknown as TanaClient, config, {

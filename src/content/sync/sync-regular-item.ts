@@ -73,7 +73,7 @@ export async function syncRegularItem(
 
   const annotations = await syncAnnotations(
     client,
-    schema.quoteTagId,
+    schema.annotationTags,
     item,
     nodeId,
     existing?.annotations ?? {},
