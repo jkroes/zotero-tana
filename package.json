@@ -32,7 +32,8 @@
     "test": "vp test",
     "test:watch": "vp test watch",
     "typecheck": "tsc",
-    "verify": "vp check && vp test"
+    "verify": "vp check && vp test",
+    "prepare": "husky"
   },
   "dependencies": {
     "eventemitter3": "^5.0.4"
@@ -49,8 +50,10 @@
     "chokidar": "^5.0.0",
     "esbuild": "^0.28.0",
     "fs-extra": "^11.3.4",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "json5": "^2.2.3",
+    "lint-staged": "^17.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tslib": "^2.8.1",
@@ -58,6 +61,9 @@
     "vite-plus": "catalog:",
     "vitest-mock-extended": "^4.0.0",
     "web-ext": "^10.1.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mts,cts,js,mjs,cjs,json,jsonc,md,css,yml,yaml}": "vp fmt"
   },
   "engines": {
     "node": ">=24.3.0"
