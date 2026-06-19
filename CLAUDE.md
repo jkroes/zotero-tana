@@ -21,16 +21,18 @@ in `docs/RELEASING.md`.
 
 ## After pushing: watch CI to green
 
-A **husky + lint-staged pre-commit hook** runs `vp fmt` on staged source/doc
-files (config in `package.json`'s `lint-staged`; hook in `.husky/pre-commit`,
-auto-installed by the `prepare` script). So formatting is normally fixed before
-it's committed — but lint, type, test, and build are _not_ run locally and still
-gate in CI.
+Two git hooks (husky, auto-installed by the `prepare` script) front-run CI:
 
-Whenever you push to `main`, the **Build** workflow runs `vp run verify`
-(`vp check` = format + lint + types, then tests) and builds the plugin. After any
-push, watch it through to completion and don't consider the work done until it's
-green:
+- **pre-commit** (`.husky/pre-commit` → lint-staged) runs `vp fmt` on staged
+  source/doc files, so formatting is auto-fixed before it's committed.
+- **pre-push** (`.husky/pre-push`) runs `pnpm verify && pnpm build` — the same
+  gate as CI's Build job (format + lint + types, tests, then esbuild build). A
+  failing push is blocked locally, so CI rarely surprises you. Bypass with
+  `git push --no-verify` for WIP.
+
+The **Build** workflow re-runs `vp run verify` + build on a clean machine as the
+source of truth. After any push, watch it through to completion and don't
+consider the work done until it's green:
 
 ```sh
 gh run watch $(gh run list --branch main --workflow Build --limit 1 \
