@@ -221,7 +221,7 @@ debounce + the modify-path no-op skip) is Zotana's; see decisions below.
   `item.modify` fires for _any_ edit, so the modify path compares
   `contentSignature(item)` (source fields only) against the last sync and drops
   no-ops before enqueuing. Surviving edits feed one **global** `SYNC_DEBOUNCE_MS`
-  (3 s) timer — a single batched job across all queued items, serialized by
+  (5 s) timer — a single batched job across all queued items, serialized by
   `syncInProgress`; no per-item timers. A deselect-flush (sync on item-tree
   `onSelect`) was tried and **removed**: `onSelect` also fires on our own
   attachment writes, re-entering `performSync` and creating duplicate nodes.

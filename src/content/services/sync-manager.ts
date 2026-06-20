@@ -13,7 +13,7 @@ import type { Service, ServiceParams } from './service';
  * pane commits one `item.modify` per field, so this coalesces a burst of edits
  * into one sync once the user settles (each edit resets the timer).
  */
-const SYNC_DEBOUNCE_MS = 3000;
+const SYNC_DEBOUNCE_MS = 5000;
 
 type QueuedSync = {
   readonly itemIDs: Set<Zotero.Item['id']>;
@@ -93,7 +93,8 @@ export class SyncManager implements Service {
     for (const item of items) {
       if (await this.hasSyncableChange(item)) changed.push(item);
     }
-    this.enqueueItemsToSync(changed);
+    // Auto-sync path: debounce to coalesce a burst of `item.modify` edits.
+    this.enqueueItemsToSync(changed, SYNC_DEBOUNCE_MS);
   }
 
   private async hasSyncableChange(item: Zotero.Item): Promise<boolean> {
@@ -120,7 +121,8 @@ export class SyncManager implements Service {
       .getChildItems(false)
       .filter((item) => !item.deleted && item.isRegularItem());
 
-    this.enqueueItemsToSync(validItems);
+    // Manual sync: run now (no debounce); still serialized via syncInProgress.
+    this.enqueueItemsToSync(validItems, 0);
   };
 
   private handleSyncItems = (items: Zotero.Item[]) => {
@@ -130,7 +132,8 @@ export class SyncManager implements Service {
       (item) => !item.deleted && item.isRegularItem(),
     );
 
-    this.enqueueItemsToSync(validItems);
+    // Manual sync: run now (no debounce); still serialized via syncInProgress.
+    this.enqueueItemsToSync(validItems, 0);
   };
 
   /**
@@ -196,11 +199,18 @@ export class SyncManager implements Service {
    * initial sync has finished and stored the Tana node ID. This has the
    * potential to create duplicate Tana nodes.
    *
-   * To address this, we use two strategies:
-   * - Debounce syncs so that they occur, at most, every `SYNC_DEBOUNCE_MS` ms
-   * - Prevent another sync from starting until the previous one has finished
+   * The guard against that is serialization: `syncInProgress` lets only one
+   * sync run at a time, and anything enqueued meanwhile is merged into
+   * `queuedSync.itemIDs` (a Set, so overlapping items dedupe) and run after.
+   * Both the auto and manual paths funnel through here, so a manual sync can't
+   * race an in-flight auto-sync (or vice versa).
+   *
+   * `delayMs` only controls how long to wait before firing: the auto path
+   * passes `SYNC_DEBOUNCE_MS` to coalesce a burst of edits; manual syncs pass
+   * `0` to run on the next tick. The delay is a coalescing knob, not the
+   * duplicate guard — that's `syncInProgress`.
    */
-  private enqueueItemsToSync(items: readonly Zotero.Item[]) {
+  private enqueueItemsToSync(items: readonly Zotero.Item[], delayMs: number) {
     if (!items.length) {
       logger.debug('No valid items to sync');
       return;
@@ -231,7 +241,7 @@ export class SyncManager implements Service {
       if (!this.syncInProgress) {
         void this.performSync();
       }
-    }, SYNC_DEBOUNCE_MS);
+    }, delayMs);
 
     this.queuedSync = { itemIDs, timeoutID };
   }
