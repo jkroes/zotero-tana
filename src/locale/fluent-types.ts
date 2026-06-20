@@ -36,5 +36,6 @@ export type FluentMessageId =
   | 'zotana-error-missing-pref'
   | 'zotana-error-missing-tana-token'
   | 'zotana-error-missing-tana-parent-node'
+  | 'zotana-error-missing-tana-workspace'
   | 'zotana-error-tana-unreachable'
   | 'zotana-error-import-no-node-id';
