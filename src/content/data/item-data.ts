@@ -19,6 +19,21 @@ export type StoredAnnotation = {
   /** Last-synced node name + description, to detect in-place changes. */
   name: string;
   description: string;
+  /**
+   * Epoch ms when this annotation's Tana node was created. Drives the same
+   * index-lag grace the reference node uses (`createdAt` on `TanaSyncData`): a
+   * reachability search miss within a short grace of creation is treated as the
+   * search index not having caught up yet (keep), not as a deleted node
+   * (recreate). Set on create, preserved across in-place updates; absent for
+   * annotations synced before this existed (backfilled on the next sync).
+   */
+  createdAt?: number;
+  /**
+   * Last-written 1-based reading-order rank, to detect when an annotation's
+   * position shifted (an insert/delete moves the ones after it) and rewrite its
+   * `Order` field. Absent for annotations synced before this existed.
+   */
+  order?: number;
 };
 
 export type TanaSyncData = {
@@ -115,6 +130,9 @@ function parseAnnotations(value: unknown): Record<string, StoredAnnotation> {
         nodeId: record.nodeId,
         name: record.name,
         description: record.description,
+        createdAt:
+          typeof record.createdAt === 'number' ? record.createdAt : undefined,
+        order: typeof record.order === 'number' ? record.order : undefined,
       };
     }
   }

@@ -32,14 +32,22 @@ each keyed by its Zotero annotation key so re-syncs update them in place:
 - **Highlights / underlines** → `#highlight` — the selected text is the node
   name; any comment becomes the node's description.
 - **Notes / text** → `#comment` — the typed note is the node name.
-- **Image annotations** → `#image` — a **text placeholder** (`Image annotation
-(p. N)`); the actual cropped image is **not** synced, because the Tana Local
+- **Image annotations** → `#image` — a fixed **text placeholder** (`Image
+annotation`); the actual cropped image is **not** synced, because the Tana Local
   API has no way to upload image data. Any comment becomes the description.
 - **Ink** annotations are skipped (no text content).
 
-Every annotation node also carries an `Annotation` field with a
-`zotero://open-pdf` back-link that jumps straight to the annotation in the PDF
-(plain text, like all URL fields — see Known limitations).
+Every annotation node also carries three fields:
+
+- **`Annotation`** — a `zotero://open-pdf` back-link that jumps straight to the
+  annotation in the PDF (plain text, like all URL fields — see Known
+  limitations). Written once at creation.
+- **`Page`** — the annotation's Zotero page label. Written once at creation.
+- **`Order`** — the annotation's 1-based **reading-order rank**. Unlike the other
+  two, this is rewritten whenever the rank shifts (inserting or deleting an
+  annotation moves the ones after it). **Sort by `Order`** in Tana to see your
+  annotations in reading order regardless of the node tree order (see the
+  reordering note under Known limitations).
 
 **Three `Annotation` fields, and merging them:** schema creation gives each of
 `#highlight`, `#comment`, and `#image` its **own** `Annotation` field — Tana's
@@ -49,17 +57,17 @@ Tana: Zotana finds the field by its name on each tag every sync, so as long as
 all three tags still have a field named `Annotation` (kept as a URL field) after
 the merge, annotation syncing keeps working. Don't rename it or remove it from
 any of the three tags — the next sync would recreate a fresh `Annotation` field
-on whichever tag is missing one, bringing the duplicates back.
+on whichever tag is missing one, bringing the duplicates back. The same is true
+of the `Page` field: each annotation tag gets its own, resolved by name, and you
+can merge them the same way.
 
 **Replacing an image placeholder with the real image:** you can paste the image
 directly onto the placeholder node in Tana and it will survive every future
 sync. Zotana never reads the live node content — it only rewrites a node when the
 text it _would_ produce differs from what it last wrote, and an image
-annotation's placeholder text (derived from its page) never changes. Two rules:
-edit the **existing** node in place (deleting it and creating a new image node
-loses the id Zotana tracks, so it recreates the placeholder), and don't manually
-re-label the PDF's pages in Zotero (that changes the placeholder text and would
-overwrite your image on the next sync).
+annotation's placeholder text is the fixed string `Image annotation`, so it never
+changes. Just edit the **existing** node in place — deleting it and creating a new
+image node loses the id Zotana tracks, so it would recreate the placeholder.
 
 ### What gets overwritten vs. left alone
 
@@ -159,6 +167,14 @@ first avoids that, since Tana preserves the tag for every node already using it.
 - **Standalone notes are not synced.** Zotana syncs regular items (and their PDF/
   EPUB annotations); standalone Zotero note items are skipped. An item's own
   abstract still syncs as a field — only note _items_ are out of scope.
+- **Annotation node tree order isn't maintained — sort by the `Order` field
+  instead.** New annotation nodes are appended under the reference node, so the
+  raw child order can drift from reading order (e.g. a node deleted in Tana and
+  rebuilt comes back last). Zotana doesn't physically reorder nodes — Tana's
+  node-move operation has spawned duplicates in testing. Instead, every annotation
+  node carries an `Order` number field with its reading-order rank, rewritten each
+  sync when it changes; **sort by `Order`** in Tana to get reading order
+  regardless of the tree order.
 
 ## Development
 

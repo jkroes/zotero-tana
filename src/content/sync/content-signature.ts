@@ -104,7 +104,12 @@ function localSchema(config: SchemaConfig): ResolvedSchema {
     Person: '',
     Organization: '',
   };
-  const emptyAnnotationTag = { tagId: '', annotationFieldId: '' };
+  const emptyAnnotationTag = {
+    tagId: '',
+    annotationFieldId: '',
+    pageFieldId: '',
+    orderFieldId: '',
+  };
   return {
     workspaceId: '',
     tagId: '',

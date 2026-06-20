@@ -238,6 +238,21 @@ export const ANNOTATION_TAG_KEYS = [
  */
 export const ANNOTATION_FIELD_NAME = 'Annotation';
 
+/**
+ * Plain-text field created on every annotation tag, holding the annotation's
+ * Zotero page label. Written in the create-time paste; stable per annotation, so
+ * never rewritten (like the `Annotation` back-link).
+ */
+export const ANNOTATION_PAGE_FIELD_NAME = 'Page';
+
+/**
+ * Number field created on every annotation tag, holding the annotation's 1-based
+ * reading-order rank. Unlike `Annotation`/`Page`, this is rewritten whenever an
+ * annotation's rank changes (an insert/delete shifts the ones after it), so the
+ * user can sort by it to recover reading order regardless of the node tree order.
+ */
+export const ANNOTATION_ORDER_FIELD_NAME = 'Order';
+
 /** Tag applied to synced Zotero items so they can be filtered/found. */
 export const TANA_TAG_NAME = 'tana';
 

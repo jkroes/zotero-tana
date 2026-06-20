@@ -137,7 +137,7 @@ function fieldSignatures(node: TanaReferenceNode): Record<string, string> {
  * (rebuild). Anchored to each node's own create time, so a long-lived node trashed
  * hours later is well past its window and still rebuilds correctly.
  */
-const INDEX_LAG_GRACE_MS = 30_000;
+export const INDEX_LAG_GRACE_MS = 30_000;
 
 async function nodeReachable(
   client: TanaClient,

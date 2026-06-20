@@ -89,10 +89,12 @@ describe('ensureSchema — bootstrap (nothing exists)', () => {
     expect(schema.tagId).toBe('tag-zotero');
     expect(schema.entityTagIds.Person).toBe('tag-Person');
     expect(schema.entityTagIds.Organization).toBe('tag-Organization');
-    // annotation tags + their Annotation back-link field
+    // annotation tags + their Annotation back-link, Page, and Order fields
     expect(schema.annotationTags.highlight).toEqual({
       tagId: 'tag-highlight',
       annotationFieldId: 'field-Annotation',
+      pageFieldId: 'field-Page',
+      orderFieldId: 'field-Order',
     });
     expect(schema.annotationTags.comment.tagId).toBe('tag-comment');
     expect(schema.annotationTags.image.tagId).toBe('tag-image');
@@ -137,6 +139,22 @@ describe('ensureSchema — bootstrap (nothing exists)', () => {
       addCalls.filter(
         (call: unknown[]) =>
           (call[1] as { name: string }).name === 'Annotation',
+      ),
+    ).toHaveLength(3);
+
+    // each annotation tag got a plain Page field
+    expect(byName('Page')).toMatchObject({ dataType: 'plain' });
+    expect(
+      addCalls.filter(
+        (call: unknown[]) => (call[1] as { name: string }).name === 'Page',
+      ),
+    ).toHaveLength(3);
+
+    // each annotation tag got a number Order field
+    expect(byName('Order')).toMatchObject({ dataType: 'number' });
+    expect(
+      addCalls.filter(
+        (call: unknown[]) => (call[1] as { name: string }).name === 'Order',
       ),
     ).toHaveLength(3);
 
@@ -217,7 +235,8 @@ describe('ensureSchema — resolve (everything exists)', () => {
       { id: 'tag-comment', name: 'comment' },
       { id: 'tag-image', name: 'image' },
     ]);
-    // Reference tag exposes its fields; each annotation tag already has Annotation.
+    // Reference tag exposes its fields; each annotation tag already has its
+    // Annotation and Page fields.
     client.getTagSchema.mockImplementation((tagId: string) =>
       Promise.resolve(
         tagId === 'tag-zotero'
@@ -226,7 +245,11 @@ describe('ensureSchema — resolve (everything exists)', () => {
               '- **Item Type** (id:field-ItemType):: Options',
               '- **Abstract** (id:field-Abstract):: Content',
             ].join('\n')
-          : '- **Annotation** (id:field-Annotation):: URL',
+          : [
+              '- **Annotation** (id:field-Annotation):: URL',
+              '- **Page** (id:field-Page):: Content',
+              '- **Order** (id:field-Order):: Number',
+            ].join('\n'),
       ),
     );
 
