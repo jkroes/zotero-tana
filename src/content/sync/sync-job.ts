@@ -67,7 +67,7 @@ async function prepareSyncJob(window: Window): Promise<SyncJobParams> {
     );
   }
 
-  const workspaceId = await resolveWorkspaceId(client);
+  const workspaceId = getRequiredZotanaPref(ZotanaPref.tanaWorkspaceId);
   const schema = await ensureSchema(client, getSchemaConfig(), {
     workspaceId,
     optionSeeds: { itemType: zoteroItemTypeNames() },
@@ -83,26 +83,6 @@ async function prepareSyncJob(window: Window): Promise<SyncJobParams> {
     citationFormat: getCitationFormat(),
     titleFormat: getTitleFormat(),
   };
-}
-
-/**
- * The workspace to create/resolve the schema in: the user's configured choice, or
- * the first workspace the token can see. (Tags are workspace-scoped, so the parent
- * node configured for references must live in this same workspace.)
- */
-async function resolveWorkspaceId(client: TanaClient): Promise<string> {
-  const configured = getZotanaPref(ZotanaPref.tanaWorkspaceId);
-  if (configured) return configured;
-
-  const workspaces = await client.listWorkspaces();
-  const first = workspaces[0]?.id;
-  if (!first) {
-    throw new LocalizableError(
-      'No Tana workspace is available for the provided token.',
-      'zotana-error-no-workspace',
-    );
-  }
-  return first;
 }
 
 /** Localized names of all Zotero item types, to seed the Item Type options field. */

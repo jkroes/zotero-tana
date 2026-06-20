@@ -46,8 +46,9 @@ type StatusKind = 'idle' | 'busy' | 'ok' | 'error';
 
 type State = {
   config: SchemaConfig;
-  workspaces: Workspace[];
   workspaceId: string;
+  /** Workspaces fetched by Detect, shown in the picker. Empty until clicked. */
+  workspaces: Workspace[];
   titleFormat: PageTitleFormat;
   statusKind: StatusKind;
   statusMessage: string;
@@ -84,18 +85,14 @@ export class SchemaPanel extends React.Component<Props, State> {
     super(props);
     this.state = {
       config: getSchemaConfig(),
-      workspaces: [],
       workspaceId: getZotanaPref(ZotanaPref.tanaWorkspaceId) ?? '',
+      workspaces: [],
       titleFormat:
         getZotanaPref(ZotanaPref.pageTitleFormat) ??
         PageTitleFormat.itemAuthorDateCitation,
       statusKind: 'idle',
       statusMessage: '',
     };
-  }
-
-  public componentDidMount(): void {
-    void this.loadWorkspaces();
   }
 
   /** Build a client from the saved token, or null when no token is set yet. */
@@ -109,33 +106,66 @@ export class SchemaPanel extends React.Component<Props, State> {
     });
   }
 
-  private async loadWorkspaces(): Promise<void> {
+  /** Persist and reflect a workspace ID chosen via the input or Detect. */
+  private applyWorkspaceId(workspaceId: string): void {
+    setZotanaPref(ZotanaPref.tanaWorkspaceId, workspaceId);
+    this.setState({ workspaceId });
+  }
+
+  private handleWorkspaceIdChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ): void => {
+    this.applyWorkspaceId(event.target.value.trim());
+  };
+
+  /** Picking a workspace copies its ID into the (source-of-truth) text field. */
+  private handleWorkspaceSelect = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ): void => {
+    const id = event.target.value;
+    if (id) this.applyWorkspaceId(id);
+  };
+
+  /**
+   * Populate the workspace picker from `GET /workspaces`. Run on demand (not at
+   * mount) so it reflects the current token and a running Tana — fixing the old
+   * dropdown's load-once staleness. Requires the account-level Personal Access
+   * Token (the only token the Local API accepts); a workspace/Input-API token
+   * 401s here. Sync never calls this — it requires the configured ID outright.
+   */
+  private handleDetect = async (): Promise<void> => {
     const client = this.buildClient();
-    if (!client) return;
+    if (!client) {
+      this.setStatus('error', 'Set your Tana API token first.');
+      return;
+    }
+
+    this.setStatus('busy', 'Detecting workspaces…');
     try {
       const workspaces = await client.listWorkspaces();
-      this.setState((prev) => ({
-        workspaces,
-        // Default to the first workspace when none is chosen yet.
-        workspaceId: prev.workspaceId || workspaces[0]?.id || '',
-      }));
+      this.setState({ workspaces });
+      const only = workspaces.length === 1 ? workspaces[0] : undefined;
+      if (only) {
+        this.applyWorkspaceId(only.id);
+        this.setStatus('ok', `Found workspace ${only.name ?? only.id}.`);
+      } else if (workspaces.length > 1) {
+        this.setStatus('ok', 'Pick a workspace from the list.');
+      } else {
+        this.setStatus(
+          'error',
+          'No workspaces for this token. Use an account-level Personal Access Token.',
+        );
+      }
     } catch (error) {
-      logger.error('Failed to list Tana workspaces', error);
+      logger.error('Failed to detect Tana workspace', error);
+      this.setStatus('error', `Detect failed: ${describeError(error)}`);
     }
-  }
+  };
 
   private persistConfig(config: SchemaConfig): void {
     setSchemaConfig(config);
     this.setState({ config });
   }
-
-  private handleWorkspaceChange = (
-    event: React.ChangeEvent<HTMLSelectElement>,
-  ): void => {
-    const workspaceId = event.target.value;
-    setZotanaPref(ZotanaPref.tanaWorkspaceId, workspaceId);
-    this.setState({ workspaceId });
-  };
 
   private updateEntityTag(key: EntityTag, name: string): void {
     this.persistConfig({
@@ -174,7 +204,7 @@ export class SchemaPanel extends React.Component<Props, State> {
       return;
     }
     if (!this.state.workspaceId) {
-      this.setStatus('error', 'Pick a workspace first.');
+      this.setStatus('error', 'Enter a workspace ID first.');
       return;
     }
 
@@ -231,29 +261,52 @@ export class SchemaPanel extends React.Component<Props, State> {
   public render(): React.ReactNode {
     const {
       config,
-      workspaces,
       workspaceId,
+      workspaces,
       titleFormat,
       statusKind,
       statusMessage,
     } = this.state;
 
+    // The dropdown reflects the text field only when the ID is one Detect found;
+    // a manually-typed ID leaves it on the placeholder without a phantom option.
+    const selectValue = workspaces.some((ws) => ws.id === workspaceId)
+      ? workspaceId
+      : '';
+
     return (
       <div className="zotana-schema-panel">
         <div className="zotana-margin-block-start">
-          <label htmlFor="zotana-schema-workspace">Workspace: </label>
-          <select
+          <label htmlFor="zotana-schema-workspace">Workspace ID: </label>
+          <input
             id="zotana-schema-workspace"
+            type="text"
             value={workspaceId}
-            onChange={this.handleWorkspaceChange}
+            placeholder="Workspace ID"
+            onChange={this.handleWorkspaceIdChange}
+          />
+          <button
+            type="button"
+            style={{ marginInlineStart: 8 }}
+            onClick={() => void this.handleDetect()}
           >
-            {!workspaceId && <option value="">Select a workspace…</option>}
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name ?? workspace.id}
-              </option>
-            ))}
-          </select>
+            Detect
+          </button>
+          {workspaces.length > 0 && (
+            <select
+              aria-label="Pick a workspace"
+              style={{ marginInlineStart: 8 }}
+              value={selectValue}
+              onChange={this.handleWorkspaceSelect}
+            >
+              <option value="">Pick a workspace…</option>
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name ?? ws.id}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Names of every other supertag Zotana creates. */}

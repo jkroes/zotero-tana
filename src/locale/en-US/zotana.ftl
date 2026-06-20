@@ -69,5 +69,6 @@ zotana-warning-referenced-fields = Referenced in Tana, not updated: { $fields }
 zotana-error-missing-pref = Missing value for { $pref }. Please enter it in Zotana preferences.
 zotana-error-missing-tana-token = Tana API token not set. Please enter it in Zotana preferences.
 zotana-error-missing-tana-parent-node = Tana parent node ID not set. Please enter it in Zotana preferences.
+zotana-error-missing-tana-workspace = Tana workspace ID not set. Please enter it in Zotana preferences.
 zotana-error-tana-unreachable = Tana Local API is not reachable. Open the Tana app and enable the Local API.
 zotana-error-import-no-node-id = Tana did not return a node ID for the imported reference.

@@ -5,6 +5,7 @@ import { ErrorL10nId, LocalizableError } from './LocalizableError';
 const L10N_IDS: Partial<Record<ZotanaPref, ErrorL10nId>> = {
   tanaToken: 'zotana-error-missing-tana-token',
   tanaParentNodeId: 'zotana-error-missing-tana-parent-node',
+  tanaWorkspaceId: 'zotana-error-missing-tana-workspace',
 };
 
 export class MissingPrefError extends LocalizableError {

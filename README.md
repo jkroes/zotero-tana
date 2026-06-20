@@ -104,7 +104,9 @@ select the `.xpi`. Or build it yourself (see Development).
 
 In Zotero → Settings → Zotana:
 
-1. **API Token** — paste your Tana personal access token.
+1. **API Token** — paste your **account-level** Tana Personal Access Token
+   (account settings, top-right). This is the only token the Local API accepts; a
+   per-workspace "API token" (for the cloud Input API) is rejected with 401.
 2. **Parent Node ID** — paste the ID of the Tana node where new reference nodes
    are created (e.g. Library).
 3. **Local API URL** — optional; defaults to `http://localhost:8262`.
@@ -112,7 +114,8 @@ In Zotero → Settings → Zotana:
    modified** to turn on automatic re-sync (it's in the same Sync Preferences
    group; leave it off to sync only on demand or when an item is added to a
    watched collection).
-5. In the **Tana Schema** panel (at the bottom): pick the workspace; name every
+5. In the **Tana Schema** panel (at the bottom): enter the **Workspace ID** (or
+   click **Detect** to fill it from the token); name every
    supertag Zotana creates (Person / Organization / highlight / comment / image,
    and the reference tag); choose the **reference node title** format; keep or
    rename the fields (blank field names use their defaults) and choose which sync;
