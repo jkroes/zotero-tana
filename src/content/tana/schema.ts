@@ -13,6 +13,8 @@ import type { SchemaConfig } from '../prefs/schema-config';
 import { TanaClient } from './client';
 import {
   ANNOTATION_FIELD_NAME,
+  ANNOTATION_ORDER_FIELD_NAME,
+  ANNOTATION_PAGE_FIELD_NAME,
   CATALOG_BY_KEY,
   effectiveFieldName,
   type AnnotationKind,
@@ -23,10 +25,15 @@ import {
 
 export type ResolvedField = { name: string; id: string };
 
-/** A resolved annotation supertag plus its `Annotation` back-link field id. */
+/**
+ * A resolved annotation supertag plus its `Annotation` back-link field id, its
+ * `Page` field id, and its `Order` (reading-order rank) field id.
+ */
 export type ResolvedAnnotationTag = {
   tagId: string;
   annotationFieldId: string;
+  pageFieldId: string;
+  orderFieldId: string;
 };
 
 /**
@@ -142,14 +149,16 @@ export async function ensureSchema(
   }
 
   // Annotation tags (highlight/comment/image), each with an `Annotation` URL
-  // field for the PDF back-link. Independent of the reference fields above, so
-  // resolved last. The field is keyed off each tag's own schema markdown, so
-  // re-running is idempotent even though addField makes a global def.
+  // field for the PDF back-link and a `Page` field for the page label.
+  // Independent of the reference fields above, so resolved last. Each field is
+  // keyed off the tag's own schema markdown, so re-running is idempotent even
+  // though addField makes a global def.
   const resolveAnnotationTag = async (
     name: string,
   ): Promise<ResolvedAnnotationTag> => {
     const annTagId = await resolveOrCreateTag(name);
     const annFields = parseTagSchemaFields(await client.getTagSchema(annTagId));
+
     let annotationFieldId = annFields.get(ANNOTATION_FIELD_NAME);
     if (!annotationFieldId) {
       const created = await client.addField(annTagId, {
@@ -158,7 +167,26 @@ export async function ensureSchema(
       });
       annotationFieldId = created.fieldId;
     }
-    return { tagId: annTagId, annotationFieldId };
+
+    let pageFieldId = annFields.get(ANNOTATION_PAGE_FIELD_NAME);
+    if (!pageFieldId) {
+      const created = await client.addField(annTagId, {
+        name: ANNOTATION_PAGE_FIELD_NAME,
+        dataType: 'plain',
+      });
+      pageFieldId = created.fieldId;
+    }
+
+    let orderFieldId = annFields.get(ANNOTATION_ORDER_FIELD_NAME);
+    if (!orderFieldId) {
+      const created = await client.addField(annTagId, {
+        name: ANNOTATION_ORDER_FIELD_NAME,
+        dataType: 'number',
+      });
+      orderFieldId = created.fieldId;
+    }
+
+    return { tagId: annTagId, annotationFieldId, pageFieldId, orderFieldId };
   };
   const annotationTags: Record<AnnotationKind, ResolvedAnnotationTag> = {
     highlight: await resolveAnnotationTag(config.annotationTags.highlight),

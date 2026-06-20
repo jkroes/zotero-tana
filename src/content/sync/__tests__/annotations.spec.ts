@@ -4,9 +4,24 @@ import { createZoteroItemMock, zoteroMock } from '../../../../test/utils';
 import { buildAnnotationNode, readItemAnnotations } from '../annotations';
 
 const annotationTags = {
-  highlight: { tagId: 'highlight-tag', annotationFieldId: 'hl-field' },
-  comment: { tagId: 'comment-tag', annotationFieldId: 'cm-field' },
-  image: { tagId: 'image-tag', annotationFieldId: 'im-field' },
+  highlight: {
+    tagId: 'highlight-tag',
+    annotationFieldId: 'hl-field',
+    pageFieldId: 'hl-page',
+    orderFieldId: 'hl-order',
+  },
+  comment: {
+    tagId: 'comment-tag',
+    annotationFieldId: 'cm-field',
+    pageFieldId: 'cm-page',
+    orderFieldId: 'cm-order',
+  },
+  image: {
+    tagId: 'image-tag',
+    annotationFieldId: 'im-field',
+    pageFieldId: 'im-page',
+    orderFieldId: 'im-order',
+  },
 };
 
 // A PDF attachment the annotations belong to; its key drives the back-link.
@@ -32,6 +47,7 @@ describe('buildAnnotationNode', () => {
       annotationType: 'highlight',
       annotationText: 'The selected text',
       annotationComment: 'my note',
+      annotationPageLabel: '7',
     });
     expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
@@ -39,6 +55,9 @@ describe('buildAnnotationNode', () => {
       description: 'my note',
       tagId: 'highlight-tag',
       annotationFieldId: 'hl-field',
+      pageFieldId: 'hl-page',
+      page: '7',
+      orderFieldId: 'hl-order',
       link: openPdfLink(a.key),
     });
   });
@@ -79,6 +98,7 @@ describe('buildAnnotationNode', () => {
       annotationType: 'note',
       annotationText: '',
       annotationComment: 'a standalone note',
+      annotationPageLabel: '3',
     });
     expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
@@ -86,6 +106,9 @@ describe('buildAnnotationNode', () => {
       description: '',
       tagId: 'comment-tag',
       annotationFieldId: 'cm-field',
+      pageFieldId: 'cm-page',
+      page: '3',
+      orderFieldId: 'cm-order',
       link: openPdfLink(a.key),
     });
   });
@@ -99,7 +122,7 @@ describe('buildAnnotationNode', () => {
     expect(buildAnnotationNode(a, attachment, annotationTags)).toBeNull();
   });
 
-  it('maps an image annotation to a #image placeholder with the page label', () => {
+  it('maps an image annotation to a #image placeholder, page in the Page field', () => {
     const a = annotation({
       annotationType: 'image',
       annotationText: '',
@@ -108,10 +131,13 @@ describe('buildAnnotationNode', () => {
     });
     expect(buildAnnotationNode(a, attachment, annotationTags)).toEqual({
       key: a.key,
-      name: 'Image annotation (p. 12)',
+      name: 'Image annotation',
       description: 'figure 2',
       tagId: 'image-tag',
       annotationFieldId: 'im-field',
+      pageFieldId: 'im-page',
+      page: '12',
+      orderFieldId: 'im-order',
       link: openPdfLink(a.key),
     });
   });
@@ -123,9 +149,9 @@ describe('buildAnnotationNode', () => {
       annotationComment: '',
       annotationPageLabel: '',
     });
-    expect(buildAnnotationNode(a, attachment, annotationTags)?.name).toBe(
-      'Image annotation',
-    );
+    const node = buildAnnotationNode(a, attachment, annotationTags);
+    expect(node?.name).toBe('Image annotation');
+    expect(node?.page).toBe('');
   });
 
   it('builds a group-library back-link from a /groups/ URI', () => {

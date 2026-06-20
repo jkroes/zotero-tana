@@ -50,7 +50,10 @@ export async function syncAnnotations(
       ? await liveAnnotationNodeIds(client, annotationTags, referenceNodeId)
       : new Set<string>();
 
-  for (const annotation of current) {
+  // `current` is in reading order, so each annotation's index is its rank. The
+  // rank is written to the Order field and rewritten whenever it shifts.
+  for (const [index, annotation] of current.entries()) {
+    const order = index + 1;
     const previous = stored[annotation.key];
     const reachable =
       previous !== undefined && isReachable(previous, liveNodeIds);
@@ -61,8 +64,9 @@ export async function syncAnnotations(
           referenceNodeId,
           previous,
           annotation,
+          order,
         )
-      : await createAnnotationNode(client, referenceNodeId, annotation);
+      : await createAnnotationNode(client, referenceNodeId, annotation, order);
   }
 
   // Trash nodes for annotations removed from Zotero since the last sync. Only
@@ -137,15 +141,21 @@ async function createAnnotationNode(
   client: TanaClient,
   referenceNodeId: string,
   annotation: AnnotationNode,
+  order: number,
 ): Promise<StoredAnnotation> {
   // Carry the back-link in the paste under the tag's Annotation field, as plain
   // text (like every URL field — the user converts URLs to nodes in Tana). The
-  // link is stable per annotation, so it's only ever written here.
-  const paste = [
+  // page label goes in the Page field. Both are stable per annotation, so
+  // they're only ever written here.
+  const lines = [
     '%%tana%%',
     `- ${PLACEHOLDER_NAME} #[[^${annotation.tagId}]]`,
     `  - [[^${annotation.annotationFieldId}]]:: ${annotation.link}`,
-  ].join('\n');
+  ];
+  if (annotation.page) {
+    lines.push(`  - [[^${annotation.pageFieldId}]]:: ${annotation.page}`);
+  }
+  const paste = lines.join('\n');
   const { createdNodes } = await client.import(referenceNodeId, paste);
 
   // The annotation node is the placeholder-named one (the field-value node the
@@ -165,8 +175,14 @@ async function createAnnotationNode(
     name: annotation.name,
     ...(annotation.description ? { description: annotation.description } : {}),
   });
+  // The reading-order rank goes in its own (mutable) Order field.
+  await client.setFieldContent(
+    created.id,
+    annotation.orderFieldId,
+    String(order),
+  );
 
-  return toStored(created.id, annotation, undefined);
+  return toStored(created.id, annotation, undefined, order);
 }
 
 /** Update a still-reachable annotation node in place, writing only what changed. */
@@ -175,6 +191,7 @@ async function updateAnnotationNode(
   referenceNodeId: string,
   previous: StoredAnnotation,
   annotation: AnnotationNode,
+  order: number,
 ): Promise<StoredAnnotation> {
   const fields: { name?: string; description?: string | null } = {};
   if (previous.name !== annotation.name) fields.name = annotation.name;
@@ -182,23 +199,35 @@ async function updateAnnotationNode(
     // A cleared comment must explicitly clear the description.
     fields.description = annotation.description || null;
   }
+  const nameOrDescChanged =
+    fields.name !== undefined || fields.description !== undefined;
+  // Rewrite Order whenever the rank shifted (an insert/delete moves the ones
+  // after it). A missing stored order (pre-Order annotation) counts as changed.
+  const orderChanged = previous.order !== order;
 
-  if (fields.name === undefined && fields.description === undefined) {
+  if (!nameOrDescChanged && !orderChanged) {
     // Unchanged and still reachable — keep the node, backfilling createdAt for an
     // annotation synced before it was tracked.
-    return toStored(previous.nodeId, annotation, previous.createdAt);
+    return toStored(previous.nodeId, annotation, previous.createdAt, order);
   }
 
   try {
-    await client.update(previous.nodeId, fields);
-    return toStored(previous.nodeId, annotation, previous.createdAt);
+    if (nameOrDescChanged) await client.update(previous.nodeId, fields);
+    if (orderChanged) {
+      await client.setFieldContent(
+        previous.nodeId,
+        annotation.orderFieldId,
+        String(order),
+      );
+    }
+    return toStored(previous.nodeId, annotation, previous.createdAt, order);
   } catch (error) {
     if (error instanceof TanaApiError && error.status === 404) {
       // Backstop: the reachability search said live but the node was purged
       // between then and this write (or its `createdAt` grace let a missing node
       // through). Recreate it, stamping a fresh createdAt.
       logger.debug('Recreating hard-deleted annotation node', annotation.key);
-      return createAnnotationNode(client, referenceNodeId, annotation);
+      return createAnnotationNode(client, referenceNodeId, annotation, order);
     }
     throw error;
   }
@@ -207,17 +236,19 @@ async function updateAnnotationNode(
 /**
  * Build the stored record for an annotation. `createdAt` is preserved when given
  * (in-place update of an existing node) and stamped fresh otherwise (create, or
- * backfill for a pre-tracking annotation).
+ * backfill for a pre-tracking annotation). `order` is the rank just written.
  */
 function toStored(
   nodeId: string,
   annotation: AnnotationNode,
   createdAt: number | undefined,
+  order: number,
 ): StoredAnnotation {
   return {
     nodeId,
     name: annotation.name,
     description: annotation.description,
     createdAt: createdAt ?? Date.now(),
+    order,
   };
 }

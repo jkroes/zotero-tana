@@ -6,12 +6,13 @@
  *   - highlight / underline -> #highlight node; name = selected text, the comment
  *     becomes the node's *description*.
  *   - note / text           -> #comment node; name = the typed content.
- *   - image                 -> #image placeholder node ("Image annotation (p. N)");
+ *   - image                 -> #image placeholder node ("Image annotation");
  *                              comment, if any, becomes the description.
  *   - ink                   -> skipped (no text content).
  *
  * Every node also carries an `Annotation` URL field with a `zotero://open-pdf`
- * deep link back to the annotation in its PDF.
+ * deep link back to the annotation in its PDF, and a `Page` field with the
+ * annotation's Zotero page label.
  *
  * `annotationText` is only populated for highlight/underline; every other type
  * carries its content in `annotationComment` (mirrors Zotero's own display-title
@@ -32,6 +33,12 @@ export type AnnotationNode = {
   tagId: string;
   /** The tag's `Annotation` URL field id. */
   annotationFieldId: string;
+  /** The tag's `Page` field id. */
+  pageFieldId: string;
+  /** Zotero page label for the annotation; empty string when none. */
+  page: string;
+  /** The tag's `Order` (reading-order rank) field id. */
+  orderFieldId: string;
   /** `zotero://open-pdf/...?annotation=KEY` deep link to the annotation. */
   link: string;
 };
@@ -72,6 +79,7 @@ export function buildAnnotationNode(
 ): AnnotationNode | null {
   const key = annotation.key;
   const comment = htmlToPlainText(annotation.annotationComment);
+  const page = annotation.annotationPageLabel || '';
 
   const make = (
     kind: AnnotationKind,
@@ -83,6 +91,9 @@ export function buildAnnotationNode(
     description,
     tagId: annotationTags[kind].tagId,
     annotationFieldId: annotationTags[kind].annotationFieldId,
+    pageFieldId: annotationTags[kind].pageFieldId,
+    page,
+    orderFieldId: annotationTags[kind].orderFieldId,
     link: annotationLink(attachment, key),
   });
 
@@ -99,9 +110,8 @@ export function buildAnnotationNode(
       return make('comment', comment, '');
     }
     case 'image': {
-      const page = annotation.annotationPageLabel;
-      const name = page ? `Image annotation (p. ${page})` : 'Image annotation';
-      return make('image', name, comment);
+      // Page lives in the Page field now, not the node name.
+      return make('image', 'Image annotation', comment);
     }
     default:
       // 'ink' (and any future type) has no text content — skip.

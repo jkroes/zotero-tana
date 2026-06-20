@@ -48,9 +48,24 @@ const schema: ResolvedSchema = {
   entityTagIds: { Person: TAG.Person, Organization: TAG.Organization },
   entityTagNames: { Person: 'Person', Organization: 'Organization' },
   annotationTags: {
-    highlight: { tagId: 'tag-highlight', annotationFieldId: 'fid-hl' },
-    comment: { tagId: 'tag-comment', annotationFieldId: 'fid-cm' },
-    image: { tagId: 'tag-image', annotationFieldId: 'fid-im' },
+    highlight: {
+      tagId: 'tag-highlight',
+      annotationFieldId: 'fid-hl',
+      pageFieldId: 'pid-hl',
+      orderFieldId: 'oid-hl',
+    },
+    comment: {
+      tagId: 'tag-comment',
+      annotationFieldId: 'fid-cm',
+      pageFieldId: 'pid-cm',
+      orderFieldId: 'oid-cm',
+    },
+    image: {
+      tagId: 'tag-image',
+      annotationFieldId: 'fid-im',
+      pageFieldId: 'pid-im',
+      orderFieldId: 'oid-im',
+    },
   },
   fields: {
     item: FIELD.item,

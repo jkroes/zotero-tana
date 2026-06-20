@@ -16,9 +16,24 @@ import { syncAnnotations } from '../sync-annotations';
 vi.mock('../annotations');
 
 const annotationTags = {
-  highlight: { tagId: 'highlight-tag', annotationFieldId: 'hl-field' },
-  comment: { tagId: 'comment-tag', annotationFieldId: 'cm-field' },
-  image: { tagId: 'image-tag', annotationFieldId: 'im-field' },
+  highlight: {
+    tagId: 'highlight-tag',
+    annotationFieldId: 'hl-field',
+    pageFieldId: 'hl-page',
+    orderFieldId: 'hl-order',
+  },
+  comment: {
+    tagId: 'comment-tag',
+    annotationFieldId: 'cm-field',
+    pageFieldId: 'cm-page',
+    orderFieldId: 'cm-order',
+  },
+  image: {
+    tagId: 'image-tag',
+    annotationFieldId: 'im-field',
+    pageFieldId: 'im-page',
+    orderFieldId: 'im-order',
+  },
 };
 
 const mockedReadItemAnnotations = vi.mocked(readItemAnnotations);
@@ -29,6 +44,7 @@ function createClientMock() {
       createdNodes: [{ id: 'new-node', name: 'Zotana annotation' }],
     }),
     update: vi.fn().mockResolvedValue(undefined),
+    setFieldContent: vi.fn().mockResolvedValue(undefined),
     trash: vi.fn().mockResolvedValue(undefined),
     // The reachability search; tests set the live node IDs they expect.
     search: vi.fn().mockResolvedValue([]),
@@ -62,6 +78,9 @@ const highlight: AnnotationNode = {
   description: 'with a comment',
   tagId: 'highlight-tag',
   annotationFieldId: 'hl-field',
+  pageFieldId: 'hl-page',
+  page: '5',
+  orderFieldId: 'hl-order',
   link: 'zotero://open-pdf/library/items/ATT?annotation=AAA',
 };
 
@@ -81,14 +100,23 @@ describe('syncAnnotations — create', () => {
     expect(paste).toContain('#[[^highlight-tag]]');
     // back-link written as plain text under the Annotation field
     expect(paste).toContain('[[^hl-field]]:: ' + highlight.link);
+    // page label written under the Page field
+    expect(paste).toContain('[[^hl-page]]:: 5');
     expect(client.update).toHaveBeenCalledWith('new-node', {
       name: 'A highlighted sentence',
       description: 'with a comment',
     });
+    // reading-order rank (1-based) written to the Order field
+    expect(client.setFieldContent).toHaveBeenCalledWith(
+      'new-node',
+      'hl-order',
+      '1',
+    );
     expect(result.AAA).toMatchObject({
       nodeId: 'new-node',
       name: 'A highlighted sentence',
       description: 'with a comment',
+      order: 1,
     });
     expect(result.AAA?.createdAt).toEqual(expect.any(Number));
   });
@@ -111,6 +139,9 @@ describe('syncAnnotations — create', () => {
         description: '',
         tagId: 'comment-tag',
         annotationFieldId: 'cm-field',
+        pageFieldId: 'cm-page',
+        page: '',
+        orderFieldId: 'cm-order',
         link: 'zotero://open-pdf/library/items/ATT?annotation=N1',
       },
     ]);
@@ -162,7 +193,7 @@ describe('syncAnnotations — update in place (still reachable)', () => {
     });
   });
 
-  it('does nothing for an unchanged, reachable annotation', async () => {
+  it('does nothing for an unchanged, reachable annotation at the same rank', async () => {
     const client = createClientMock();
     setLiveNodes(client, 'existing');
     mockedReadItemAnnotations.mockReturnValue([highlight]);
@@ -172,11 +203,13 @@ describe('syncAnnotations — update in place (still reachable)', () => {
         nodeId: 'existing',
         name: highlight.name,
         description: highlight.description,
+        order: 1,
       },
     });
 
     expect(client.import).not.toHaveBeenCalled();
     expect(client.update).not.toHaveBeenCalled();
+    expect(client.setFieldContent).not.toHaveBeenCalled();
     expect(client.trash).not.toHaveBeenCalled();
   });
 
@@ -226,6 +259,56 @@ describe('syncAnnotations — update in place (still reachable)', () => {
       expect.stringContaining('#[[^highlight-tag]]'),
     );
     expect(result.AAA?.nodeId).toBe('new-node');
+  });
+});
+
+describe('syncAnnotations — Order field', () => {
+  it('rewrites Order when an annotation rank shifts, without touching text', async () => {
+    const client = createClientMock();
+    setLiveNodes(client, 'existing');
+    mockedReadItemAnnotations.mockReturnValue([highlight]);
+
+    // Stored at rank 3, but now first in reading order → rank 1.
+    await run(client, {
+      AAA: {
+        nodeId: 'existing',
+        name: highlight.name,
+        description: highlight.description,
+        order: 3,
+      },
+    });
+
+    expect(client.update).not.toHaveBeenCalled();
+    expect(client.setFieldContent).toHaveBeenCalledWith(
+      'existing',
+      'hl-order',
+      '1',
+    );
+  });
+
+  it('writes ranks in reading order for multiple new annotations', async () => {
+    const client = createClientMock();
+    const second: AnnotationNode = {
+      ...highlight,
+      key: 'BBB',
+      name: 'second highlight',
+    };
+    mockedReadItemAnnotations.mockReturnValue([highlight, second]);
+
+    const result = await run(client, {});
+
+    expect(client.setFieldContent).toHaveBeenCalledWith(
+      'new-node',
+      'hl-order',
+      '1',
+    );
+    expect(client.setFieldContent).toHaveBeenCalledWith(
+      'new-node',
+      'hl-order',
+      '2',
+    );
+    expect(result.AAA?.order).toBe(1);
+    expect(result.BBB?.order).toBe(2);
   });
 });
 
@@ -303,6 +386,7 @@ describe('syncAnnotations — index-lag grace', () => {
         name: highlight.name,
         description: highlight.description,
         createdAt: 9_000,
+        order: 1,
       },
     });
 

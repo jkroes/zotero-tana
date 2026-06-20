@@ -28,6 +28,12 @@ export type StoredAnnotation = {
    * annotations synced before this existed (backfilled on the next sync).
    */
   createdAt?: number;
+  /**
+   * Last-written 1-based reading-order rank, to detect when an annotation's
+   * position shifted (an insert/delete moves the ones after it) and rewrite its
+   * `Order` field. Absent for annotations synced before this existed.
+   */
+  order?: number;
 };
 
 export type TanaSyncData = {
@@ -126,6 +132,7 @@ function parseAnnotations(value: unknown): Record<string, StoredAnnotation> {
         description: record.description,
         createdAt:
           typeof record.createdAt === 'number' ? record.createdAt : undefined,
+        order: typeof record.order === 'number' ? record.order : undefined,
       };
     }
   }
