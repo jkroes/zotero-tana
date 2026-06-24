@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.0
+
+Stop duplicating predefined options field values.
+
+- **Reference existing options instead of writing duplicate values.** Options
+  fields (Item Type, Container, Tags, Collections) were written as plain text. A
+  text write that matches a value Tana itself collected is reused, but one that
+  collides with a **predefined** option (e.g. the preset Item Type list) is not —
+  Tana mints a fresh detached value node every sync, so each item got its own
+  duplicate "Report", "Book Section", etc. instead of pointing at the shared
+  option. Sync now resolves each value to its existing option's id (read from the
+  tag schema) and writes it by id via `setFieldOption`, falling back to a text
+  write only for genuinely new values. Applies to every options field on both the
+  create and update paths.
+
+## 0.4.1
+
+- **Warn and skip a removed annotation that another Tana node links to.** Before
+  trashing the Tana node for an annotation removed from Zotero, sync now checks
+  whether another node links to it; if so it leaves the node untrashed, reports it
+  as a warning, and keeps tracking it so a later sync trashes it once the link is
+  gone — mirroring the reference node's warn-and-skip. (Annotation edits need no
+  guard: name/description changes preserve the node id, so inbound links survive.)
+
+## 0.4.0
+
+Group annotations under an Annotations field; fix trashed-node reachability.
+Verified end-to-end against live Zotero + Tana.
+
+- **Annotations container field.** Annotations now sync into a single
+  `Annotations` field on the reference node instead of as bare children.
+  `ensureSchema` always creates the field; its tuple node id is resolved lazily,
+  persisted, and reused so repeated imports don't spawn duplicate fields, and a
+  tuple the user deleted in Tana is detected and recreated.
+- **Field renames:** `Item` → `Item Link`, `Annotation` → `Annotation Link`.
+- **Trashed-node reachability fix.** `/nodes/search` returns trashed nodes
+  (`inTrash: true`) — the assumption that trashed nodes drop out of search was
+  wrong, so a node the user deleted in Tana counted as reachable and was updated
+  in place inside the trash instead of rebuilt. Reachability/usefulness checks now
+  filter `inTrash`.
+
 ## 0.3.1
 
 Workspace configuration by ID, and two duplicate-node fixes for title-format

@@ -125,5 +125,6 @@ function localSchema(config: SchemaConfig): ResolvedSchema {
     },
     annotationsFieldId: '',
     fields,
+    optionsByFieldId: new Map(),
   };
 }

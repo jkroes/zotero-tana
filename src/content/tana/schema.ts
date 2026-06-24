@@ -60,6 +60,13 @@ export type ResolvedSchema = {
   annotationsFieldId: string;
   /** Enabled fields only: catalog key -> resolved name + attribute id. */
   fields: Partial<Record<FieldKey, ResolvedField>>;
+  /**
+   * Per options field, its predefined/known option values as `optionText ->
+   * optionId`, keyed by attribute id. Lets sync write a value BY ID via
+   * `setFieldOption` (reusing the existing option) instead of a string write that
+   * would duplicate a pre-existing option. Empty for fields with no options yet.
+   */
+  optionsByFieldId: Map<string, Map<string, string>>;
 };
 
 export type EnsureSchemaOptions = {
@@ -79,6 +86,51 @@ export function parseTagSchemaFields(markdown: string): Map<string, string> {
     if (match?.[1] && match[2]) fields.set(match[1].trim(), match[2]);
   }
   return fields;
+}
+
+/**
+ * Parse an options field's predefined option values from `GET /tags/{id}/schema`
+ * markdown into `fieldId -> (optionText -> optionId)`. Options render as indented
+ * children under their field header:
+ *
+ *   - **Item Type** (id:24IpEaa3OT6S):: Options
+ *     - Report (id:_CHKhUWwV09I)
+ *
+ * Used so sync can write an options value BY ID via `setFieldOption` (reusing the
+ * predefined/auto-collected option node) instead of a string write — a string
+ * write that collides with a pre-existing template-defined option name does NOT
+ * dedupe, it mints a fresh detached value node every time (live-verified). Blank
+ * option labels (trashed-seed leftovers) are skipped.
+ */
+export function parseTagSchemaOptions(
+  markdown: string,
+): Map<string, Map<string, string>> {
+  const byField = new Map<string, Map<string, string>>();
+  let current: Map<string, string> | null = null;
+
+  for (const line of markdown.split('\n')) {
+    const header = /^\s*-\s*\*\*(.+?)\*\*\s*\(id:([^)]+)\)\s*::\s*(.*)$/.exec(
+      line,
+    );
+    if (header) {
+      // Only options-typed fields carry selectable option children.
+      if (header[2] && /^Options\b/.test(header[3] ?? '')) {
+        current = new Map();
+        byField.set(header[2], current);
+      } else {
+        current = null;
+      }
+      continue;
+    }
+
+    if (current) {
+      const option = /^\s+-\s*(.+?)\s*\(id:([^)]+)\)\s*$/.exec(line);
+      const text = option?.[1]?.trim();
+      if (option?.[2] && text) current.set(text, option[2]);
+    }
+  }
+
+  return byField;
 }
 
 /** Node ids of any seed placeholder options still present in the schema markdown. */
@@ -118,7 +170,11 @@ export async function ensureSchema(
     Organization: await resolveOrCreateTag(config.entityTags.Organization),
   };
 
-  const existingFields = parseTagSchemaFields(await client.getTagSchema(tagId));
+  const tagSchemaMarkdown = await client.getTagSchema(tagId);
+  const existingFields = parseTagSchemaFields(tagSchemaMarkdown);
+  // Predefined/auto-collected option values per options field, captured from the
+  // same schema read so sync can write options by id (see parseTagSchemaOptions).
+  const optionsByFieldId = parseTagSchemaOptions(tagSchemaMarkdown);
 
   const fields: Partial<Record<FieldKey, ResolvedField>> = {};
   let createdTransientSeed = false;
@@ -221,6 +277,7 @@ export async function ensureSchema(
     annotationTags,
     annotationsFieldId,
     fields,
+    optionsByFieldId,
   };
 }
 

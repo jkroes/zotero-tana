@@ -76,6 +76,7 @@ const schema: ResolvedSchema = {
     creators: FIELD.creators,
     abstract: FIELD.abstract,
   },
+  optionsByFieldId: new Map(),
 };
 
 function createClientMock() {
@@ -212,10 +213,13 @@ describe('syncRegularItem — update path', () => {
       FIELD.date.id,
       '2017-12-01',
     );
+    // Item Type is an options field with no matching predefined option here, so
+    // it falls back to a string write (which auto-collects), with an explicit mode.
     expect(client.setFieldContent).toHaveBeenCalledWith(
       'node1',
       FIELD.itemType.id,
       'Journal Article',
+      'replace',
     );
     expect(client.setFieldOption).toHaveBeenCalledWith(
       'node1',
@@ -245,6 +249,44 @@ describe('syncRegularItem — update path', () => {
       titleSyncedAt: expect.any(Number),
       annotations: {},
     });
+  });
+
+  it('writes an options value BY ID when it matches a predefined option', async () => {
+    const item = createZoteroItemMock();
+    const client = createClientMock();
+    mockedGetTanaSyncData.mockReturnValue({
+      nodeId: 'node1',
+      title: 'Vaswani, 2017',
+      fields: {},
+      annotations: {},
+    });
+    mockSearchByType(client, {
+      [TAG.reference]: [{ id: 'node1', name: 'Vaswani, 2017', inTrash: false }],
+      [TAG.Person]: [{ id: 'person1', name: 'Ashish Vaswani', inTrash: false }],
+    });
+
+    // Item Type has a predefined "Journal Article" option in the schema.
+    const params = makeParams(client);
+    params.schema = {
+      ...schema,
+      optionsByFieldId: new Map([
+        [FIELD.itemType.id, new Map([['Journal Article', 'opt-ja']])],
+      ]),
+    };
+
+    await syncRegularItem(item, params);
+
+    // referenced by id, not string-written (which would mint a duplicate node)
+    expect(client.setFieldOption).toHaveBeenCalledWith(
+      'node1',
+      FIELD.itemType.id,
+      'opt-ja',
+      'replace',
+    );
+    const wroteItemTypeString = client.setFieldContent.mock.calls.some(
+      (call: unknown[]) => call[1] === FIELD.itemType.id,
+    );
+    expect(wroteItemTypeString).toBe(false);
   });
 
   it('writes nothing when no field changed since the last sync', async () => {

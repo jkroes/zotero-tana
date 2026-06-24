@@ -1,6 +1,6 @@
 {
   "name": "zotana",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Sync Zotero items into Tana",
   "homepage": "https://github.com/jkroes/zotero-tana",
   "bugs": {

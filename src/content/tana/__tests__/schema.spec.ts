@@ -6,6 +6,7 @@ import {
   ensureSchema,
   parseSeedOptionIds,
   parseTagSchemaFields,
+  parseTagSchemaOptions,
 } from '../schema';
 
 const SCHEMA_MARKDOWN = `# Tag definition: zotero (id:tag-zotero)
@@ -26,6 +27,29 @@ describe('parseTagSchemaFields', () => {
     expect(fields.get('Item Type')).toBe('field-ItemType');
     // option children are not fields
     expect(fields.has('Article')).toBe(false);
+  });
+});
+
+describe('parseTagSchemaOptions', () => {
+  it('maps each options field id to its option text -> id, skipping blanks', () => {
+    const markdown = `## Template Fields
+- **Creators** (id:field-Creators):: Options
+  - __zotana_seed__ (id:seed-1)
+- **Abstract** (id:field-Abstract):: Content
+- **Item Type** (id:field-ItemType):: Options
+  - Article (id:opt-article)
+  - Report (id:opt-report)
+- **Container** (id:field-Container):: Options
+  -  (id:opt-blank)
+`;
+    const options = parseTagSchemaOptions(markdown);
+
+    expect(options.get('field-ItemType')?.get('Article')).toBe('opt-article');
+    expect(options.get('field-ItemType')?.get('Report')).toBe('opt-report');
+    // non-options field has no option map
+    expect(options.has('field-Abstract')).toBe(false);
+    // blank-label option (trashed-seed leftover) is skipped
+    expect(options.get('field-Container')?.size).toBe(0);
   });
 });
 

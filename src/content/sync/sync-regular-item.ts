@@ -10,6 +10,7 @@ import { buildReference } from '../tana/reference-builder';
 import type { ResolvedSchema } from '../tana/schema';
 import {
   toTanaPaste,
+  type TanaField,
   type TanaLink,
   type TanaReferenceNode,
 } from '../tana/tana-paste';
@@ -79,7 +80,7 @@ export async function syncRegularItem(
       ? Date.now()
       : (existing.titleSyncedAt ?? existing.createdAt);
   } else {
-    nodeId = await createNode(client, node, parentNodeId);
+    nodeId = await createNode(client, schema, node, parentNodeId);
     signatures = fieldSignatures(node);
     createdAt = Date.now();
     titleSyncedAt = createdAt;
@@ -184,12 +185,54 @@ async function nodeReachable(
   return anchor !== undefined && Date.now() - anchor <= INDEX_LAG_GRACE_MS;
 }
 
+/** An options-typed field (single-value `options` or multi-value `optionList`). */
+function isOptionField(field: TanaField): boolean {
+  return field.type === 'options' || field.type === 'optionList';
+}
+
+/**
+ * Write an options field's value(s). A value that matches a known option for this
+ * field (predefined or previously auto-collected, from `schema.optionsByFieldId`)
+ * is written BY ID via `setFieldOption`, reusing that option node. A value with no
+ * matching option falls back to a string write, which auto-collects and dedupes a
+ * fresh option by text. This split matters because a string write whose text
+ * collides with a pre-existing template-defined option does NOT dedupe against it —
+ * it mints a new detached value node every sync (live-verified; the duplication
+ * bug this fixes). First value replaces, the rest append (multi-value fields).
+ */
+async function writeOptionsField(
+  client: TanaClient,
+  schema: ResolvedSchema,
+  nodeId: string,
+  field: TanaField,
+): Promise<void> {
+  if (field.type !== 'options' && field.type !== 'optionList') return;
+  const values = field.type === 'optionList' ? field.values : [field.value];
+  const options = schema.optionsByFieldId.get(field.id);
+  for (const [index, value] of values.entries()) {
+    const mode = index === 0 ? 'replace' : 'append';
+    const optionId = options?.get(value);
+    if (optionId) {
+      await client.setFieldOption(nodeId, field.id, optionId, mode);
+    } else {
+      await client.setFieldContent(nodeId, field.id, value, mode);
+    }
+  }
+}
+
 async function createNode(
   client: TanaClient,
+  schema: ResolvedSchema,
   node: TanaReferenceNode,
   parentNodeId: string,
 ): Promise<string> {
-  const paste = toTanaPaste(node);
+  // Options fields are written by id AFTER import (see writeOptionsField): a value
+  // colliding with a pre-existing option won't dedupe through the paste either, so
+  // emit everything else inline and resolve options against the schema afterward.
+  const paste = toTanaPaste({
+    ...node,
+    fields: node.fields.filter((field) => !isOptionField(field)),
+  });
   logger.debug('Importing new Tana node under', parentNodeId);
   const result = await client.import(parentNodeId, paste);
 
@@ -204,6 +247,12 @@ async function createNode(
       'Tana import did not return a created node ID',
       'zotana-error-import-no-node-id',
     );
+  }
+
+  for (const field of node.fields) {
+    if (field.type === 'options' || field.type === 'optionList') {
+      await writeOptionsField(client, schema, created.id, field);
+    }
   }
 
   return created.id;
@@ -318,17 +367,8 @@ async function updateNode(
           index === 0 ? 'replace' : 'append',
         );
       }
-    } else if (field.type === 'optionList') {
-      // Multi-value text options (Tags/Collections): write each value as its own
-      // option (one node per value), auto-collecting. First replaces, rest append.
-      for (const [index, value] of field.values.entries()) {
-        await client.setFieldContent(
-          nodeId,
-          field.id,
-          value,
-          index === 0 ? 'replace' : 'append',
-        );
-      }
+    } else if (field.type === 'options' || field.type === 'optionList') {
+      await writeOptionsField(client, schema, nodeId, field);
     } else {
       // plain/url/number/options set by string; date fields take the bare ISO
       // value (no [[date:]] wrapper) via the API.
